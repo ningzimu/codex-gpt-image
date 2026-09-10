@@ -6,10 +6,14 @@ Release notes are generated from this file. Keep changelog entries in English.
 
 ### Features
 
+- Default to GPT Image 2.5 Flare and support Sunburst selection, xhigh/max quality, and transparent PNG/WebP output with model-specific validation.
+
 - Add the initial Codex GPT Image skill and Codex OAuth image-generation CLI.
 - Add Codex device-code login fallback for machines without an existing Codex auth file.
 
 ### Improvements
+
+- Distinguish the requested image model from the backend-reported model in CLI output.
 
 - Increase the default Codex Images request timeout to 600 seconds. (#3)
 - Route Codex OAuth image requests through the Codex Images endpoints instead of the Responses image-generation tool. (#2)
@@ -25,6 +29,8 @@ Release notes are generated from this file. Keep changelog entries in English.
 - Remove unsupported transparent backgrounds from the `--background` choices for `gpt-image-2`. (#2)
 
 ### Documentation
+
+- Document OAuth probe results and unverified backend model, quality, and size enforcement.
 
 - Add Chinese and English installation and usage documentation.
 - Add an OpenAI Images API parameter reference for agent workflows. (#2)

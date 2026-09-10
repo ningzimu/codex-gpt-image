@@ -33,7 +33,7 @@ OPENAI_AUTH_BASE_URL = "https://auth.openai.com"
 DEFAULT_OPENAI_CODEX_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
 CODEX_CLIENT_ID_ENV_VAR = "CODEX_APP_SERVER_LOGIN_CLIENT_ID"
 OPENAI_CODEX_DEVICE_CALLBACK_URL = f"{OPENAI_AUTH_BASE_URL}/deviceauth/callback"
-DEFAULT_IMAGE_MODEL = "gpt-image-2"
+DEFAULT_IMAGE_MODEL = "gpt-image-2.5-flare"
 DEFAULT_SIZE = "auto"
 DEFAULT_QUALITY = "auto"
 DEFAULT_OUTPUT_FORMAT = "png"
@@ -50,9 +50,9 @@ MAX_INPUT_IMAGES = 16
 MAX_RESPONSE_BYTES = 64 * 1024 * 1024
 MAX_BASE64_CHARS = 64 * 1024 * 1024
 MAX_IMAGE_DATA_URL_CHARS = 20_971_520
-SUPPORTED_QUALITIES = {"low", "medium", "high", "auto"}
+SUPPORTED_QUALITIES = {"low", "medium", "high", "xhigh", "max", "auto"}
 SUPPORTED_OUTPUT_FORMATS = {"png", "jpeg", "jpg", "webp"}
-SUPPORTED_BACKGROUNDS = {"opaque", "auto"}
+SUPPORTED_BACKGROUNDS = {"opaque", "transparent", "auto"}
 SUPPORTED_MODERATIONS = {"low", "auto"}
 CHATGPT_AUTH_CLAIM = "https://api.openai.com/auth"
 CHATGPT_ACCOUNT_ID_CLAIM = "chatgpt_account_id"
@@ -405,14 +405,25 @@ def normalize_output_format(value: str | None) -> str:
     return "jpeg" if fmt == "jpg" else fmt
 
 
-def validate_quality(value: str) -> None:
+def is_gpt_image_2_5(model: str) -> bool:
+    return bool(re.fullmatch(r"gpt-image-2\.5-(?:flare|sunburst)(?:-\d{4}-\d{2}-\d{2})?", model))
+
+
+def validate_quality(value: str, model: str) -> None:
     if value not in SUPPORTED_QUALITIES:
-        raise CliError("quality must be low, medium, high, or auto.")
+        raise CliError("quality must be low, medium, high, xhigh, max, or auto.")
+    if value in {"xhigh", "max"} and not is_gpt_image_2_5(model):
+        raise CliError("xhigh and max quality require gpt-image-2.5-flare or gpt-image-2.5-sunburst.")
 
 
-def validate_background(value: str | None) -> None:
+def validate_background(value: str | None, model: str, output_format: str) -> None:
     if value is not None and value not in SUPPORTED_BACKGROUNDS:
-        raise CliError("background must be auto or opaque.")
+        raise CliError("background must be auto, opaque, or transparent.")
+    if value == "transparent":
+        if not is_gpt_image_2_5(model):
+            raise CliError("transparent backgrounds require gpt-image-2.5-flare or gpt-image-2.5-sunburst in this CLI.")
+        if output_format not in {"png", "webp"}:
+            raise CliError("transparent backgrounds require png or webp output.")
 
 
 def validate_moderation(value: str | None) -> None:
@@ -443,7 +454,7 @@ def parse_size(value: str) -> tuple[int, int] | None:
 
 
 def is_gpt_image_2(model: str) -> bool:
-    return "gpt-image-2" in model
+    return bool(re.fullmatch(r"gpt-image-2(?:-\d{4}-\d{2}-\d{2})?", model)) or is_gpt_image_2_5(model)
 
 
 def validate_size(size: str, model: str) -> None:
@@ -461,13 +472,13 @@ def validate_size(size: str, model: str) -> None:
     min_edge = min(width, height)
     pixels = width * height
     if max_edge > GPT_IMAGE_2_MAX_EDGE:
-        raise CliError("gpt-image-2 max edge must be <= 3840.")
+        raise CliError("GPT Image 2/2.5 max edge must be <= 3840.")
     if width % 16 != 0 or height % 16 != 0:
-        raise CliError("gpt-image-2 width and height must be multiples of 16.")
+        raise CliError("GPT Image 2/2.5 width and height must be multiples of 16.")
     if max_edge / min_edge > GPT_IMAGE_2_MAX_RATIO:
-        raise CliError("gpt-image-2 long-to-short ratio must be <= 3:1.")
+        raise CliError("GPT Image 2/2.5 long-to-short ratio must be <= 3:1.")
     if pixels < GPT_IMAGE_2_MIN_PIXELS or pixels > GPT_IMAGE_2_MAX_PIXELS:
-        raise CliError("gpt-image-2 total pixels must be between 655,360 and 8,294,400.")
+        raise CliError("GPT Image 2/2.5 total pixels must be between 655,360 and 8,294,400.")
 
 
 def guess_mime(path: Path, data: bytes) -> str:
@@ -512,8 +523,8 @@ def build_image_body(args: argparse.Namespace, prompt: str, image_paths: list[st
         else default_output_compression(output_format)
     )
 
-    validate_quality(args.quality)
-    validate_background(args.background)
+    validate_quality(args.quality, image_model)
+    validate_background(args.background, image_model, output_format)
     validate_moderation(args.moderation)
     validate_output_compression(output_compression, output_format)
     validate_size(args.size, image_model)
@@ -688,6 +699,7 @@ def cmd_generate(args: argparse.Namespace) -> int:
     for path in written:
         print(path)
     eprint(f"Generated {len(written)} image(s) via Codex OAuth in {time.time() - start:.1f}s.")
+    eprint(f"Requested model: {image_model}; backend-reported model: {response.get('model') or 'not reported (selection unverified)'}.")
     return 0
 
 
