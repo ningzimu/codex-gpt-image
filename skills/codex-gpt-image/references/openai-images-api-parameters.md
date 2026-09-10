@@ -6,7 +6,8 @@ Treat the linked OpenAI documentation as the source of truth when behavior chang
 - Create image: https://developers.openai.com/api/reference/resources/images/methods/generate
 - Create image edit: https://developers.openai.com/api/reference/resources/images/methods/edit
 - Image generation guide: https://developers.openai.com/api/docs/guides/image-generation
-- GPT Image 2 model page: https://developers.openai.com/api/docs/models/gpt-image-2
+- GPT Image 2.5 Flare: https://developers.openai.com/api/docs/models/gpt-image-2.5-flare
+- GPT Image 2.5 Sunburst: https://developers.openai.com/api/docs/models/gpt-image-2.5-sunburst
 
 ## Codex Request Shape
 
@@ -40,6 +41,10 @@ Request headers:
 Generation requests contain the user's prompt plus the shared image parameters below.
 Edit requests also contain one or more local reference images encoded as base64 data URLs, and may include a mask when the user requests a masked edit.
 
+## Observed OAuth Backend Limits
+
+On 2026-09-11, requests naming Flare and Sunburst returned images; an xhigh transparent PNG and a max-quality edit request also returned usable images. An invalid model name succeeded too, without a model ID in the response. All four valid-name probes requested 1024x1024 but returned other dimensions. These probes do not establish actual model routing or quality enforcement. Public API constraints below describe request validation, not a guarantee that the OAuth backend applies every field.
+
 ## Parameter Selection
 
 Prefer official API defaults unless the user request requires a specific option.
@@ -51,12 +56,12 @@ For `size`, use an explicit value only when the user asks for a specific dimensi
 
 | API field | CLI flag | Default | Values / constraints | Notes |
 | --- | --- | --- | --- | --- |
-| `model` | `--model` | `gpt-image-2` | GPT Image model string | This skill defaults to `gpt-image-2` by design. |
+| `model` | `--model` | `gpt-image-2.5-flare` | GPT Image model string | Use `gpt-image-2.5-sunburst` for precise editing; dated snapshots are also accepted. `CODEX_GPT_IMAGE_MODEL` overrides the default. |
 | `prompt` | `--prompt`, `--prompt-file` | Required | Text, up to 32000 chars for GPT image models | Required for generation and edits. Use the user's actual prompt; do not reuse wording from this reference. |
 | `n` | `--count` | `1` | Integer `1` through `10` | Number of generated or edited images. |
-| `size` | `--size` | `auto` | `auto` or `WIDTHxHEIGHT` | For `gpt-image-2`, both edges must be multiples of 16, max edge <= 3840, aspect ratio <= 3:1, total pixels between 655360 and 8294400. |
-| `quality` | `--quality` | `auto` | `low`, `medium`, `high`, `auto` | GPT image models support these values. |
-| `background` | `--background` | `auto` | CLI exposes `auto`, `opaque` | The public API also documents `transparent`, but `gpt-image-2` does not support it, so this CLI does not expose that value. |
+| `size` | `--size` | `auto` | `auto` or `WIDTHxHEIGHT` | For both GPT Image 2.5 models and `gpt-image-2`, both edges must be multiples of 16, max edge <= 3840, aspect ratio <= 3:1, total pixels between 655360 and 8294400. |
+| `quality` | `--quality` | `auto` | `low`, `medium`, `high`, `xhigh`, `max`, `auto` | `xhigh` and `max` require GPT Image 2.5 (including dated snapshots). |
+| `background` | `--background` | `auto` | `auto`, `opaque`, `transparent` | This CLI allows transparency only for GPT Image 2.5 with PNG or WebP output; `gpt-image-2` does not support it. |
 | `moderation` | `--moderation` | `auto` | `low`, `auto` | GPT image model moderation strictness. |
 | `output_format` | `--output-format` | `png` | `png`, `jpeg`, `webp` | GPT image models return base64 image data. |
 | `output_compression` | `--output-compression` | `100` for `jpeg` and `webp` | Integer `0` through `100` | Only valid when `output_format` is `jpeg` or `webp`. |
