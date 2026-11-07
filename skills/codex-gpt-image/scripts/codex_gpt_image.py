@@ -583,19 +583,23 @@ def build_parser() -> argparse.ArgumentParser:
     login.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT)
     login.set_defaults(func=lambda args: 0 if login_device_code(args) else 1)
 
-    gen = sub.add_parser("generate", help="Generate or edit an image through Codex OAuth.")
+    gen = sub.add_parser(
+        "generate",
+        help="Generate or edit an image through Codex OAuth.",
+        description="Supply exactly one of --prompt or --prompt-file. All other options are optional.",
+    )
     prompts = gen.add_mutually_exclusive_group(required=True)
-    prompts.add_argument("--prompt", "-p")
-    prompts.add_argument("--prompt-file")
-    gen.add_argument("--image", "-i", action="append", help="Reference/edit image path. Repeatable.")
-    gen.add_argument("--transparent-background", action="store_true", help="Request a transparent PNG.")
-    gen.add_argument("--out", "-o", default=None)
-    gen.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT)
-    gen.add_argument("--base-url", default=None)
-    gen.add_argument("--login-if-missing", action="store_true")
-    gen.add_argument("--open-browser", action="store_true")
+    prompts.add_argument("--prompt", "-p", metavar="TEXT", help="Image generation or editing instructions.")
+    prompts.add_argument("--prompt-file", metavar="PATH", help="Read the prompt from a UTF-8 text file.")
+    gen.add_argument("--image", "-i", action="append", help="Edit using this image. Repeat in reference order. Omit to generate a new image.")
+    gen.add_argument("--transparent-background", action="store_true", help="Request a transparent PNG. Omit to leave the background up to the backend.")
+    gen.add_argument("--out", "-o", metavar="PATH", help="Output PNG path (default: output/codex-gpt-image/output.png).")
+    gen.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT, help="Request timeout in seconds (default: %(default)s).")
+    gen.add_argument("--base-url", help="Override the Codex backend base URL.")
+    gen.add_argument("--login-if-missing", action="store_true", help="Start device login if local authentication is missing.")
+    gen.add_argument("--open-browser", action="store_true", help="Open the verification page during device login.")
     gen.add_argument("--client-id", help="Override the Codex OAuth client id when --login-if-missing runs.")
-    gen.add_argument("--dry-run", action="store_true")
+    gen.add_argument("--dry-run", action="store_true", help="Show the endpoint and request fields without sending the request.")
     gen.set_defaults(func=cmd_generate)
 
     return parser
