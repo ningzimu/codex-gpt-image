@@ -2,7 +2,6 @@ import importlib.util
 from pathlib import Path
 import sys
 import unittest
-import os
 from unittest.mock import patch
 
 SCRIPT = Path(__file__).resolve().parents[1] / 'skills/codex-gpt-image/scripts/codex_gpt_image.py'
@@ -15,39 +14,24 @@ spec.loader.exec_module(cli)
 class ImageParametersTest(unittest.TestCase):
     def body(self, *flags):
         args = cli.build_parser().parse_args(['generate', '--prompt', 'test', *flags])
-        return cli.build_image_body(args, 'test', [])[2]
+        return cli.build_image_body(args.prompt, args.image or [], args.transparent_background)
 
-    def test_latest_models(self):
-        self.assertEqual(self.body()['model'], 'gpt-image-2.6-flare')
-        for model in cli.SUPPORTED_MODELS:
-            body = self.body('--model', model, '--quality', 'max', '--size', '1536x864',
-                             '--complexity', 'medium', '--background', 'transparent')
-            self.assertEqual(body['complexity'], 'medium')
-            self.assertEqual(body['model'], model)
+    def test_optional_fields_are_absent_by_default(self):
+        self.assertEqual(self.body(), {'prompt': 'test'})
 
-    def test_reject_other_models(self):
-        for model in ('gpt-image-2', 'gpt-image-2.5-flare', 'gpt-image-2.6-flare-invalid'):
-            with self.subTest(model=model), patch.dict(os.environ, CODEX_GPT_IMAGE_MODEL=model):
-                with self.assertRaises(cli.CliError):
-                    self.body()
+    def test_transparency_is_opt_in(self):
+        self.assertEqual(self.body('--transparent-background'),
+                         {'prompt': 'test', 'background': 'transparent'})
 
-    def test_size_boundaries(self):
-        for size in ('auto', '1024x640', '3840x2160'):
-            self.body('--size', size)
-        for size in ('1000x1000', '4096x2048', '1024x512', '3840x1024', '3840x3840'):
-            with self.subTest(size=size), self.assertRaises(cli.CliError):
-                self.body('--size', size)
-
-    def test_png_only(self):
-        import contextlib
-        import io
-        self.assertEqual(self.body()['output_format'], 'png')
-        for flags in (('--output-format', 'jpeg'), ('--output-format', 'webp'),
-                      ('--output-compression', '50')):
-            with self.subTest(flags=flags), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
-                self.body(*flags)
-        with self.assertRaises(cli.CliError):
-            self.body('--markup', 'overlay.png')
+    def test_references_preserve_order_and_allow_optional_transparency(self):
+        with patch.object(cli, 'image_reference', side_effect=lambda path: path.name):
+            for flags in ([], ['--transparent-background']):
+                with self.subTest(flags=flags):
+                    body = self.body('-i', 'first.png', '-i', 'second.png', *flags)
+                    expected = {'prompt': 'test', 'images': ['first.png', 'second.png']}
+                    if flags:
+                        expected['background'] = 'transparent'
+                    self.assertEqual(body, expected)
 
 
 if __name__ == '__main__':

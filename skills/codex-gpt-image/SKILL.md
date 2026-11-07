@@ -1,6 +1,6 @@
 ---
 name: codex-gpt-image
-description: Generate or edit images with GPT Image 2.6 through Codex/ChatGPT subscription authentication instead of OPENAI_API_KEY. Use for text-to-image, reference-image editing, or visual assets when the user wants local Codex auth, especially when no native image tool is available. Do not use for official OpenAI API-key billing or OpenAI-compatible gateways.
+description: Generate or edit images with GPT Image through Codex/ChatGPT subscription authentication instead of OPENAI_API_KEY. Use for text-to-image, reference-image editing, or visual assets when the user wants local Codex auth, especially when no native image tool is available. Do not use for official OpenAI API-key billing or OpenAI-compatible gateways.
 ---
 
 # Codex GPT Image
@@ -9,7 +9,7 @@ Use this skill to generate or edit images through Codex OAuth instead of the Ope
 
 ## When To Use
 
-- The user asks to use `gpt-image-2.6-flare` or GPT Image through Codex auth/subscription.
+- The user asks to use GPT Image through Codex auth/subscription.
 - The current agent supports `SKILL.md` but does not have a native image tool.
 - The user explicitly does not want to use `OPENAI_API_KEY`.
 - The user wants the same local image workflow across Codex, Claude Code, OpenClaw, Hermes Agent, or similar agents.
@@ -38,59 +38,10 @@ All CLI commands below assume the working directory is this skill folder. Otherw
 
 4. Edit or use reference images by passing one or more `--image` inputs. For edits, build the prompt from the user's requested changes and the invariants that must stay unchanged.
 
-5. Report the saved path(s), requested model, actual output size when inspected, and whether Codex OAuth was used. Do not claim the requested model was used unless the backend identifies it.
+5. Report the saved path(s), actual output size when inspected, and whether Codex OAuth was used. Do not claim the requested model was used unless the backend identifies it.
 
-## Defaults
+## Generate or edit
 
-- Auth file: `~/.codex/auth.json`
-- Override auth file: `CODEX_AUTH_FILE=/path/to/auth.json`
-- Login fallback: `login` uses OpenAI Codex device-code auth and writes the same auth file
-- Login client id: `--client-id`, `CODEX_APP_SERVER_LOGIN_CLIENT_ID`, then the public Codex default
-- Images base URL: `https://chatgpt.com/backend-api/codex`
-- Image model: `gpt-image-2.6-flare`
-- Size: `auto`
-- Quality: `auto`
-- Background: `auto`
-- Moderation: `auto`
-- Output format: `png`
+Supply exactly one of `--prompt` or `--prompt-file`. Describe composition, desired changes and details to preserve in the prompt. Pass local references in order with repeated `--image`. The host resolves images from the conversation to files. Include `--transparent-background` when transparency is requested. Omitted image and background fields stay absent from the request.
 
-For detailed parameter values, defaults, model-specific constraints, and CLI mapping, read `references/openai-images-api-parameters.md`.
-
-## Parameter Selection
-
-Prefer the official API defaults unless the user request requires a specific option. Read the reference before choosing explicit `model`, `size`, `quality`, `background`, `moderation`, or `output_format` values.
-
-## Prompting
-
-Keep prompts explicit and production-oriented:
-
-- State the intended asset type.
-- Quote any exact visible text.
-- Specify composition, background, style, and constraints.
-- For edits, repeat invariants: what must stay unchanged.
-- Avoid adding logos, watermarks, or extra text unless requested.
-
-## Failure Handling
-
-- Missing auth file: run `codex_gpt_image.py login --open-browser`, or ask the user to run `codex login`, then retry.
-- 401/403: the Codex OAuth token may be expired, the account may not have access, or the endpoint may reject the session. Ask the user to refresh Codex auth.
-- Network failures: retry once if the request is idempotent and the user accepts possible duplicate image generation.
-- Never print or paste tokens from `~/.codex/auth.json`.
-
-## Implementation Notes
-
-The CLI sends Codex Images requests with:
-
-- generation endpoint: `POST https://chatgpt.com/backend-api/codex/images/generations`
-- edit endpoint: `POST https://chatgpt.com/backend-api/codex/images/edits`
-- auth: `Authorization: Bearer <access token from ~/.codex/auth.json>`
-- model: `gpt-image-2.6-flare`
-
-It parses the JSON Images response and writes returned base64 image payloads to local files.
-
-## GPT Image 2.6 Compatibility
-
-Choose `gpt-image-2.6-flare` (default) or `gpt-image-2.6-sunburst` via `--model` or `CODEX_GPT_IMAGE_MODEL`. Only these exact names are accepted.
-
-On 2026-11-07, the OAuth endpoint returned a transparent PNG and edited a reference image. The PNG measured 1536×1024 for a 1536×864 request. Mask and markup probes did not reliably select the requested region. The backend did not identify the image model. GIF returned HTTP 400 (disabled for the request), and an SVG request returned a payload that failed SVG validation.
-Use `--complexity low|medium|high` for planning effort. For edits, `--markup overlay.png` supplies a transparent annotation matching the first image, mutually exclusive with mask.
+Save to a PNG with `--out`; the default is `output/codex-gpt-image/output.png`. For multiple assets, make separate calls with distinct paths. The backend selects the model. Report its identity only when returned.

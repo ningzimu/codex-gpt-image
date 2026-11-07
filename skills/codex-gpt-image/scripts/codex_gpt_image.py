@@ -33,32 +33,16 @@ OPENAI_AUTH_BASE_URL = "https://auth.openai.com"
 DEFAULT_OPENAI_CODEX_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
 CODEX_CLIENT_ID_ENV_VAR = "CODEX_APP_SERVER_LOGIN_CLIENT_ID"
 OPENAI_CODEX_DEVICE_CALLBACK_URL = f"{OPENAI_AUTH_BASE_URL}/deviceauth/callback"
-DEFAULT_IMAGE_MODEL = "gpt-image-2.6-flare"
-SUPPORTED_MODELS = (DEFAULT_IMAGE_MODEL, "gpt-image-2.6-sunburst")
-DEFAULT_SIZE = "auto"
-DEFAULT_QUALITY = "auto"
-DEFAULT_OUTPUT_FORMAT = "png"
-DEFAULT_BACKGROUND = "auto"
-DEFAULT_MODERATION = "auto"
 DEFAULT_TIMEOUT = 600
-DEFAULT_COUNT = 1
 DEVICE_CODE_TIMEOUT = 15 * 60
 DEVICE_CODE_DEFAULT_INTERVAL = 5
 DEVICE_CODE_MIN_INTERVAL = 1
-MAX_COUNT = 10
 MAX_INPUT_IMAGES = 16
 MAX_RESPONSE_BYTES = 64 * 1024 * 1024
 MAX_BASE64_CHARS = 64 * 1024 * 1024
 MAX_IMAGE_DATA_URL_CHARS = 20_971_520
-SUPPORTED_QUALITIES = {"low", "medium", "high", "xhigh", "max", "auto"}
-SUPPORTED_BACKGROUNDS = {"opaque", "transparent", "auto"}
-SUPPORTED_MODERATIONS = {"low", "auto"}
 CHATGPT_AUTH_CLAIM = "https://api.openai.com/auth"
 CHATGPT_ACCOUNT_ID_CLAIM = "chatgpt_account_id"
-STATIC_IMAGE_MIN_PIXELS = 655_360
-STATIC_IMAGE_MAX_PIXELS = 8_294_400
-STATIC_IMAGE_MAX_EDGE = 3840
-STATIC_IMAGE_MAX_RATIO = 3.0
 
 
 class CliError(RuntimeError):
@@ -397,38 +381,6 @@ def read_prompt(prompt: str | None, prompt_file: str | None) -> str:
     return text
 
 
-def validate_moderation(value: str | None) -> None:
-    if value is not None and value not in SUPPORTED_MODERATIONS:
-        raise CliError("moderation must be low or auto.")
-
-
-def parse_size(value: str) -> tuple[int, int] | None:
-    match = re.fullmatch(r"([1-9][0-9]*)x([1-9][0-9]*)", value)
-    if not match:
-        return None
-    return int(match.group(1)), int(match.group(2))
-
-
-def validate_size(size: str) -> None:
-    if size == "auto":
-        return
-    parsed = parse_size(size)
-    if parsed is None:
-        raise CliError("size must be auto or WIDTHxHEIGHT, for example 1024x1024.")
-    width, height = parsed
-    max_edge = max(width, height)
-    min_edge = min(width, height)
-    pixels = width * height
-    if max_edge > STATIC_IMAGE_MAX_EDGE:
-        raise CliError("Static image max edge must be <= 3840.")
-    if width % 16 != 0 or height % 16 != 0:
-        raise CliError("Static image width and height must be multiples of 16.")
-    if max_edge / min_edge > STATIC_IMAGE_MAX_RATIO:
-        raise CliError("Static image long-to-short ratio must be <= 3:1.")
-    if pixels < STATIC_IMAGE_MIN_PIXELS or pixels > STATIC_IMAGE_MAX_PIXELS:
-        raise CliError("Static image total pixels must be between 655,360 and 8,294,400.")
-
-
 def guess_mime(path: Path, data: bytes) -> str:
     if data.startswith(b"\x89PNG\r\n\x1a\n"):
         return "image/png"
@@ -457,51 +409,15 @@ def image_reference(path: Path) -> dict[str, str]:
     return {"image_url": image_to_data_url(path)}
 
 
-def build_image_body(args: argparse.Namespace, prompt: str, image_paths: list[str]) -> tuple[str, str, dict[str, Any]]:
+def build_image_body(prompt: str, image_paths: list[str], transparent: bool) -> dict[str, Any]:
     if len(image_paths) > MAX_INPUT_IMAGES:
         raise CliError(f"At most {MAX_INPUT_IMAGES} input images are supported.")
-    if args.mask and not image_paths:
-        raise CliError("--mask can only be used with at least one --image input.")
-
-    image_model = args.model
-    if image_model not in SUPPORTED_MODELS:
-        raise CliError(f"Unsupported model {image_model!r}. Choose from {', '.join(SUPPORTED_MODELS)}.")
-    if args.markup and (not image_paths or args.mask):
-        raise CliError("--markup requires --image and cannot be combined with --mask.")
-    validate_moderation(args.moderation)
-    validate_size(args.size)
-
-    body: dict[str, Any] = {
-        "prompt": prompt,
-        "model": image_model,
-        "n": args.count,
-        "size": args.size,
-        "quality": args.quality,
-        "output_format": DEFAULT_OUTPUT_FORMAT,
-    }
-    for field in ("complexity", "safety_identifier"):
-        value = getattr(args, field)
-        if value is not None:
-            body[field] = value
-    if args.background:
-        body["background"] = args.background
-    if args.moderation:
-        body["moderation"] = args.moderation
-    if args.user:
-        body["user"] = args.user
-
-    operation = "edit" if image_paths else "generate"
+    body: dict[str, Any] = {"prompt": prompt}
     if image_paths:
         body["images"] = [image_reference(Path(raw)) for raw in image_paths]
-        if args.markup:
-            overlay = image_reference(Path(args.markup))
-            if not overlay["image_url"].startswith("data:image/png;"):
-                raise CliError("--markup requires a transparent PNG.")
-            body["markup"] = overlay
-        if args.mask:
-            body["mask"] = image_reference(Path(args.mask))
-
-    return operation, image_model, body
+    if transparent:
+        body["background"] = "transparent"
+    return body
 
 
 def codex_image_headers(auth: CodexAuth) -> dict[str, str]:
@@ -617,11 +533,10 @@ def cmd_auth_status(args: argparse.Namespace) -> int:
 def cmd_generate(args: argparse.Namespace) -> int:
     prompt = read_prompt(args.prompt, args.prompt_file)
     image_paths = args.image or []
-    if args.count < 1 or args.count > MAX_COUNT:
-        raise CliError(f"--count must be between 1 and {MAX_COUNT}.")
     if args.out and Path(args.out).suffix.lower() != ".png":
         raise CliError("--out requires a .png filename.")
-    operation, image_model, body = build_image_body(args, prompt, image_paths)
+    operation = "edit" if image_paths else "generate"
+    body = build_image_body(prompt, image_paths, args.transparent_background)
     url = image_endpoint_url(args.base_url, operation)
 
     if args.dry_run:
@@ -629,17 +544,9 @@ def cmd_generate(args: argparse.Namespace) -> int:
             "url": url,
             "auth": "Codex OAuth access token (not loaded during dry-run)",
             "operation": operation,
-            "image_model": image_model,
-            "size": body["size"],
-            "quality": body.get("quality"),
-            "output_format": DEFAULT_OUTPUT_FORMAT,
-            "background": body.get("background"),
-            "moderation": body.get("moderation"),
+            "request_fields": list(body),
             "input_images": len(image_paths),
-            "mask": bool(args.mask),
-            "markup": bool(args.markup),
-            **{key: body[key] for key in ("complexity", "safety_identifier") if key in body},
-            "count": args.count,
+            "transparent_background": args.transparent_background,
         }
         print(json.dumps(summary, ensure_ascii=False, indent=2))
         return 0
@@ -651,7 +558,7 @@ def cmd_generate(args: argparse.Namespace) -> int:
     for path in written:
         print(path)
     eprint(f"Generated {len(written)} image(s) via Codex OAuth in {time.time() - start:.1f}s.")
-    eprint(f"Requested model: {image_model}; backend-reported model: {response.get('model') or 'not reported (selection unverified)'}.")
+    eprint(f"Backend-reported model: {response.get('model') or 'not reported (selection unverified)'}.")
     return 0
 
 
@@ -677,22 +584,12 @@ def build_parser() -> argparse.ArgumentParser:
     login.set_defaults(func=lambda args: 0 if login_device_code(args) else 1)
 
     gen = sub.add_parser("generate", help="Generate or edit an image through Codex OAuth.")
-    gen.add_argument("--prompt", "-p")
-    gen.add_argument("--prompt-file")
+    prompts = gen.add_mutually_exclusive_group(required=True)
+    prompts.add_argument("--prompt", "-p")
+    prompts.add_argument("--prompt-file")
     gen.add_argument("--image", "-i", action="append", help="Reference/edit image path. Repeatable.")
-    gen.add_argument("--mask", help="Mask image path for edits. Requires at least one --image.")
+    gen.add_argument("--transparent-background", action="store_true", help="Request a transparent PNG.")
     gen.add_argument("--out", "-o", default=None)
-    gen.add_argument("--model", choices=SUPPORTED_MODELS, default=os.getenv("CODEX_GPT_IMAGE_MODEL", DEFAULT_IMAGE_MODEL))
-    gen.add_argument("--size", default=DEFAULT_SIZE)
-    gen.add_argument("--quality", default=DEFAULT_QUALITY, choices=sorted(SUPPORTED_QUALITIES))
-    gen.add_argument("--output-format", default=DEFAULT_OUTPUT_FORMAT, choices=(DEFAULT_OUTPUT_FORMAT,))
-    gen.add_argument("--background", default=DEFAULT_BACKGROUND, choices=sorted(SUPPORTED_BACKGROUNDS))
-    gen.add_argument("--moderation", default=DEFAULT_MODERATION, choices=sorted(SUPPORTED_MODERATIONS))
-    gen.add_argument("--complexity", choices=("low", "medium", "high"))
-    gen.add_argument("--markup", help="Transparent PNG overlay for the first edit input.")
-    gen.add_argument("--safety-identifier")
-    gen.add_argument("--user")
-    gen.add_argument("--count", type=int, default=DEFAULT_COUNT, help="Number of images, 1-10.")
     gen.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT)
     gen.add_argument("--base-url", default=None)
     gen.add_argument("--login-if-missing", action="store_true")

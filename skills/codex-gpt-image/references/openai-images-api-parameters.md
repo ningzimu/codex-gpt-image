@@ -38,57 +38,7 @@ Request headers:
 | `User-Agent` | Skill user-agent string |
 | `ChatGPT-Account-ID` | Included only when an account id is available from Codex auth |
 
-Generation requests contain the user's prompt plus the shared image parameters below.
-Edit requests also contain one or more local reference images encoded as base64 data URLs, and may include a mask when the user requests a masked edit.
-
-## Observed OAuth Backend Limits
-
-On 2026-11-07, the OAuth endpoint returned a transparent PNG and edited a reference image. The PNG measured 1536×1024 for a 1536×864 request. Mask and markup probes did not reliably select the requested region. The backend did not identify the image model. GIF returned HTTP 400 (disabled for the request), and an SVG request returned a payload that failed SVG validation.
-
-## Parameter Selection
-
-Prefer official API defaults unless the user request requires a specific option.
-Do not choose a concrete `size`, `quality`, `background`, `moderation`, or `output_format` only because it appears in documentation or prior examples.
-
-For `size`, use an explicit value only when the user asks for a specific dimension, aspect ratio, resolution class, or downstream layout requirement. Otherwise leave the default behavior in place.
-
-## Shared Parameters
-
-| API field | CLI flag | Default | Values / constraints | Notes |
-| --- | --- | --- | --- | --- |
-| `model` | `--model` | `gpt-image-2.6-flare` | GPT Image model string | Use `gpt-image-2.6-sunburst` for precise editing. `CODEX_GPT_IMAGE_MODEL` overrides the default. |
-| `prompt` | `--prompt`, `--prompt-file` | Required | Text, up to 32000 chars for GPT image models | Required for generation and edits. Use the user's actual prompt; do not reuse wording from this reference. |
-| `n` | `--count` | `1` | Integer `1` through `10` | Number of generated or edited images. |
-| `size` | `--size` | `auto` | `auto` or `WIDTHxHEIGHT` | For static raster requests in this CLI, both edges must be multiples of 16, max edge <= 3840, aspect ratio <= 3:1, total pixels between 655360 and 8294400. |
-| `quality` | `--quality` | `auto` | `low`, `medium`, `high`, `xhigh`, `max`, `auto` | `xhigh` and `max` require GPT Image 2.6. |
-| `background` | `--background` | `auto` | `auto`, `opaque`, `transparent` | This CLI allows transparency only for GPT Image 2.6 with PNG output. |
-| `moderation` | `--moderation` | `auto` | `low`, `auto` | GPT image model moderation strictness. |
-| `output_format` | `--output-format` | `png` | PNG | The CLI verifies the PNG signature before saving. |
-| `user` | `--user` | Omitted | String | Optional end-user identifier. |
-
-## Edit-Only Parameters
-
-| API field | CLI flag | Default | Values / constraints | Notes |
-| --- | --- | --- | --- | --- |
-| `images` | `--image` | Omitted | One or more PNG, JPEG, or WebP files | This skill sends local files as base64 data URLs. |
-| `mask` | `--mask` | Omitted | PNG/JPEG/WebP data URL | Requires at least one `--image`. The CLI defers exact mask format, dimensions, and alpha-channel validation to the backend; prepare masks to match the source image when possible. |
-
-## Parameters Not Exposed By This CLI
-
-| API field | Reason |
-| --- | --- |
-| `stream` | This skill currently follows the Codex Images JSON response path instead of streaming partial image events. |
-| `partial_images` | Only useful with streaming responses. |
-| `response_format` | Only supported by DALL-E models; GPT image models return base64 image data. |
-| `style` | DALL-E 3 only. |
-
-## GPT Image 2.6 options
-
-| Option | Request field and behavior |
-| --- | --- |
-| `--complexity` | `complexity`: low, medium, high. Omitted by default. |
-| `--markup` | Edit-only transparent PNG annotation on the first input. Mutually exclusive with mask. |
-| `--safety-identifier` | Optional pseudonymous end-user identifier. |
+Both endpoints require a prompt. Edit requests also include an ordered `images` array of base64 data URL references. Both endpoints omit `background` unless the caller supplies `--transparent-background`, which sends `transparent`. The backend selects the model. Output files must contain PNG data.
 
 ## Device-Code Login
 
