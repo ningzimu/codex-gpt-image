@@ -53,7 +53,11 @@ python3 skills/codex-gpt-image/scripts/codex_gpt_image.py login
 
 ## Usage
 
-Supply a prompt directly or via `--prompt-file`. Reference images (repeatable) and transparency are optional. Use a separate invocation and PNG path for each asset.
+Supply the prompt with either `--prompt` or `--prompt-file`. All other options are optional.
+
+- Omit `--image` to call `/images/generations`. Supply one or more reference images to call `/images/edits`. Repeat `--image` once per file in the desired order.
+- Pass `--transparent-background` to request a transparent PNG. If omitted, the backend chooses the background and may still return a transparent image.
+- Run `generate --help` for all options. Add `--dry-run` to preview the endpoint and request fields without sending a request.
 
 ```sh
 python3 skills/codex-gpt-image/scripts/codex_gpt_image.py generate --prompt "A blue mug"

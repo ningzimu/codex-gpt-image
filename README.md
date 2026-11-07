@@ -78,7 +78,11 @@ python3 skills/codex-gpt-image/scripts/codex_gpt_image.py login
 
 ## 使用方式
 
-提示词必填，可用 `--prompt-file` 从文件读取。参考图（可重复）和透明背景均可选。每次生成一个素材，使用不同的 PNG 路径保存多个结果。
+通过 `--prompt` 或 `--prompt-file` 提供提示词，二选一。其余参数均可选。
+
+- 省略 `--image` 时，CLI 调用 `/images/generations`。传入一张或多张参考图时，CLI 调用 `/images/edits`。每张图用一个 `--image`，顺序与命令行一致。
+- 加上 `--transparent-background` 会请求透明 PNG。省略时由后端决定背景，结果也可能透明。
+- 用 `generate --help` 查看全部选项。用 `--dry-run` 可在发送前查看所选接口和请求字段。
 
 ```sh
 python3 skills/codex-gpt-image/scripts/codex_gpt_image.py generate --prompt "A blue mug"
