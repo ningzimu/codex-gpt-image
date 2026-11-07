@@ -33,7 +33,8 @@ OPENAI_AUTH_BASE_URL = "https://auth.openai.com"
 DEFAULT_OPENAI_CODEX_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
 CODEX_CLIENT_ID_ENV_VAR = "CODEX_APP_SERVER_LOGIN_CLIENT_ID"
 OPENAI_CODEX_DEVICE_CALLBACK_URL = f"{OPENAI_AUTH_BASE_URL}/deviceauth/callback"
-DEFAULT_IMAGE_MODEL = "gpt-image-2.5-flare"
+DEFAULT_IMAGE_MODEL = "gpt-image-2.6-flare"
+SUPPORTED_MODELS = (DEFAULT_IMAGE_MODEL, "gpt-image-2.6-sunburst")
 DEFAULT_SIZE = "auto"
 DEFAULT_QUALITY = "auto"
 DEFAULT_OUTPUT_FORMAT = "png"
@@ -51,15 +52,15 @@ MAX_RESPONSE_BYTES = 64 * 1024 * 1024
 MAX_BASE64_CHARS = 64 * 1024 * 1024
 MAX_IMAGE_DATA_URL_CHARS = 20_971_520
 SUPPORTED_QUALITIES = {"low", "medium", "high", "xhigh", "max", "auto"}
-SUPPORTED_OUTPUT_FORMATS = {"png", "jpeg", "jpg", "webp"}
+SUPPORTED_OUTPUT_FORMATS = {"png", "jpeg", "jpg", "webp", "gif", "svg"}
 SUPPORTED_BACKGROUNDS = {"opaque", "transparent", "auto"}
 SUPPORTED_MODERATIONS = {"low", "auto"}
 CHATGPT_AUTH_CLAIM = "https://api.openai.com/auth"
 CHATGPT_ACCOUNT_ID_CLAIM = "chatgpt_account_id"
-GPT_IMAGE_2_MIN_PIXELS = 655_360
-GPT_IMAGE_2_MAX_PIXELS = 8_294_400
-GPT_IMAGE_2_MAX_EDGE = 3840
-GPT_IMAGE_2_MAX_RATIO = 3.0
+STATIC_IMAGE_MIN_PIXELS = 655_360
+STATIC_IMAGE_MAX_PIXELS = 8_294_400
+STATIC_IMAGE_MAX_EDGE = 3840
+STATIC_IMAGE_MAX_RATIO = 3.0
 
 
 class CliError(RuntimeError):
@@ -401,29 +402,13 @@ def read_prompt(prompt: str | None, prompt_file: str | None) -> str:
 def normalize_output_format(value: str | None) -> str:
     fmt = (value or DEFAULT_OUTPUT_FORMAT).lower()
     if fmt not in SUPPORTED_OUTPUT_FORMATS:
-        raise CliError("output format must be png, jpeg, jpg, or webp.")
+        raise CliError("output format must be png, jpeg, jpg, webp, gif, or svg.")
     return "jpeg" if fmt == "jpg" else fmt
 
 
-def is_gpt_image_2_5(model: str) -> bool:
-    return bool(re.fullmatch(r"gpt-image-2\.5-(?:flare|sunburst)(?:-\d{4}-\d{2}-\d{2})?", model))
-
-
-def validate_quality(value: str, model: str) -> None:
-    if value not in SUPPORTED_QUALITIES:
-        raise CliError("quality must be low, medium, high, xhigh, max, or auto.")
-    if value in {"xhigh", "max"} and not is_gpt_image_2_5(model):
-        raise CliError("xhigh and max quality require gpt-image-2.5-flare or gpt-image-2.5-sunburst.")
-
-
-def validate_background(value: str | None, model: str, output_format: str) -> None:
-    if value is not None and value not in SUPPORTED_BACKGROUNDS:
-        raise CliError("background must be auto, opaque, or transparent.")
-    if value == "transparent":
-        if not is_gpt_image_2_5(model):
-            raise CliError("transparent backgrounds require gpt-image-2.5-flare or gpt-image-2.5-sunburst in this CLI.")
-        if output_format not in {"png", "webp"}:
-            raise CliError("transparent backgrounds require png or webp output.")
+def validate_background(value: str, output_format: str) -> None:
+    if value == "transparent" and output_format not in {"png", "webp", "svg"}:
+        raise CliError("Transparent backgrounds require PNG, WebP, or SVG output.")
 
 
 def validate_moderation(value: str | None) -> None:
@@ -453,32 +438,28 @@ def parse_size(value: str) -> tuple[int, int] | None:
     return int(match.group(1)), int(match.group(2))
 
 
-def is_gpt_image_2(model: str) -> bool:
-    return bool(re.fullmatch(r"gpt-image-2(?:-\d{4}-\d{2}-\d{2})?", model)) or is_gpt_image_2_5(model)
-
-
-def validate_size(size: str, model: str) -> None:
+def validate_size(size: str, output_format: str) -> None:
     if size == "auto":
         return
     parsed = parse_size(size)
     if parsed is None:
         raise CliError("size must be auto or WIDTHxHEIGHT, for example 1024x1024.")
     width, height = parsed
-    if not is_gpt_image_2(model):
-        if size not in {"1024x1024", "1536x1024", "1024x1536"}:
-            raise CliError("this image model only supports 1024x1024, 1536x1024, 1024x1536, or auto.")
+    if output_format == "gif":
+        if width % 16 or height % 16:
+            raise CliError("GIF frame dimensions must be multiples of 16.")
         return
     max_edge = max(width, height)
     min_edge = min(width, height)
     pixels = width * height
-    if max_edge > GPT_IMAGE_2_MAX_EDGE:
-        raise CliError("GPT Image 2/2.5 max edge must be <= 3840.")
+    if max_edge > STATIC_IMAGE_MAX_EDGE:
+        raise CliError("Static image max edge must be <= 3840.")
     if width % 16 != 0 or height % 16 != 0:
-        raise CliError("GPT Image 2/2.5 width and height must be multiples of 16.")
-    if max_edge / min_edge > GPT_IMAGE_2_MAX_RATIO:
-        raise CliError("GPT Image 2/2.5 long-to-short ratio must be <= 3:1.")
-    if pixels < GPT_IMAGE_2_MIN_PIXELS or pixels > GPT_IMAGE_2_MAX_PIXELS:
-        raise CliError("GPT Image 2/2.5 total pixels must be between 655,360 and 8,294,400.")
+        raise CliError("Static image width and height must be multiples of 16.")
+    if max_edge / min_edge > STATIC_IMAGE_MAX_RATIO:
+        raise CliError("Static image long-to-short ratio must be <= 3:1.")
+    if pixels < STATIC_IMAGE_MIN_PIXELS or pixels > STATIC_IMAGE_MAX_PIXELS:
+        raise CliError("Static image total pixels must be between 655,360 and 8,294,400.")
 
 
 def guess_mime(path: Path, data: bytes) -> str:
@@ -523,11 +504,29 @@ def build_image_body(args: argparse.Namespace, prompt: str, image_paths: list[st
         else default_output_compression(output_format)
     )
 
-    validate_quality(args.quality, image_model)
-    validate_background(args.background, image_model, output_format)
+    if image_model not in SUPPORTED_MODELS:
+        raise CliError(f"Unsupported model {image_model!r}. Choose from {', '.join(SUPPORTED_MODELS)}.")
+    if args.markup and (not image_paths or args.mask):
+        raise CliError("--markup requires --image and cannot be combined with --mask.")
+    if output_format == "svg" and (image_paths or args.count != 1):
+        raise CliError("SVG requires generation with --count 1.")
+    if args.svg_reasoning and not args.svg_model:
+        raise CliError("--svg-reasoning requires --svg-model.")
+    if args.svg_model and output_format != "svg":
+        raise CliError("--svg-model requires SVG output.")
+    if args.frame_count is not None or args.frame_duration_ms is not None:
+        if output_format != "gif":
+            raise CliError("Frame settings require GIF output.")
+    if args.frame_count is not None and not 2 <= args.frame_count <= 16:
+        raise CliError("--frame-count must be between 2 and 16.")
+    if args.frame_duration_ms is not None and not 20 <= args.frame_duration_ms <= 2000:
+        raise CliError("--frame-duration-ms must be between 20 and 2000.")
+    if output_format == "gif" and args.mask:
+        raise CliError("GIF output cannot be combined with a mask.")
+    validate_background(args.background, output_format)
     validate_moderation(args.moderation)
     validate_output_compression(output_compression, output_format)
-    validate_size(args.size, image_model)
+    validate_size(args.size, output_format)
 
     body: dict[str, Any] = {
         "prompt": prompt,
@@ -537,6 +536,14 @@ def build_image_body(args: argparse.Namespace, prompt: str, image_paths: list[st
         "quality": args.quality,
         "output_format": output_format,
     }
+    for field in ("complexity", "frame_count", "frame_duration_ms", "safety_identifier"):
+        value = getattr(args, field)
+        if value is not None:
+            body[field] = value
+    if args.svg_model:
+        body["svg"] = {"model": args.svg_model}
+        if args.svg_reasoning:
+            body["svg"]["reasoning"] = {"effort": args.svg_reasoning}
     if args.background:
         body["background"] = args.background
     if args.moderation:
@@ -549,6 +556,11 @@ def build_image_body(args: argparse.Namespace, prompt: str, image_paths: list[st
     operation = "edit" if image_paths else "generate"
     if image_paths:
         body["images"] = [image_reference(Path(raw)) for raw in image_paths]
+        if args.markup:
+            overlay = image_reference(Path(args.markup))
+            if not overlay["image_url"].startswith("data:image/png;"):
+                raise CliError("--markup requires a transparent PNG.")
+            body["markup"] = overlay
         if args.mask:
             body["mask"] = image_reference(Path(args.mask))
 
@@ -632,6 +644,16 @@ def write_images(payloads: list[tuple[str, str | None]], out: str, output_format
         if len(payload) > MAX_BASE64_CHARS:
             raise CliError("Image payload exceeded size limit.")
         data = base64.b64decode(payload)
+        if output_format == "gif" and data[:6] not in (b"GIF87a", b"GIF89a"):
+            raise CliError("Backend returned a different format than the requested GIF.")
+        if output_format == "svg":
+            from xml.etree import ElementTree
+            try:
+                root = ElementTree.fromstring(data)
+            except ElementTree.ParseError as exc:
+                raise CliError("Backend did not return SVG XML.") from exc
+            if root.tag not in ("svg", "{http://www.w3.org/2000/svg}svg"):
+                raise CliError("Backend did not return an SVG document.")
         path = target
         if multi:
             stem = target.stem or "image"
@@ -687,6 +709,8 @@ def cmd_generate(args: argparse.Namespace) -> int:
             "output_compression": body.get("output_compression"),
             "input_images": len(image_paths),
             "mask": bool(args.mask),
+            "markup": bool(args.markup),
+            **{key: body[key] for key in ("complexity", "frame_count", "frame_duration_ms", "svg", "safety_identifier") if key in body},
             "count": args.count,
         }
         print(json.dumps(summary, ensure_ascii=False, indent=2))
@@ -695,7 +719,7 @@ def cmd_generate(args: argparse.Namespace) -> int:
     auth = load_or_login_codex_auth(args)
     start = time.time()
     response = post_image_json(url, auth, body, args.timeout)
-    written = write_images(extract_image_payloads(response), args.out, output_format)
+    written = write_images(extract_image_payloads(response), args.out or f"output/codex-gpt-image/output.{output_format}", output_format)
     for path in written:
         print(path)
     eprint(f"Generated {len(written)} image(s) via Codex OAuth in {time.time() - start:.1f}s.")
@@ -729,14 +753,21 @@ def build_parser() -> argparse.ArgumentParser:
     gen.add_argument("--prompt-file")
     gen.add_argument("--image", "-i", action="append", help="Reference/edit image path. Repeatable.")
     gen.add_argument("--mask", help="Mask image path for edits. Requires at least one --image.")
-    gen.add_argument("--out", "-o", default="output/codex-gpt-image/output.png")
-    gen.add_argument("--model", default=os.getenv("CODEX_GPT_IMAGE_MODEL", DEFAULT_IMAGE_MODEL))
+    gen.add_argument("--out", "-o", default=None)
+    gen.add_argument("--model", choices=SUPPORTED_MODELS, default=os.getenv("CODEX_GPT_IMAGE_MODEL", DEFAULT_IMAGE_MODEL))
     gen.add_argument("--size", default=DEFAULT_SIZE)
     gen.add_argument("--quality", default=DEFAULT_QUALITY, choices=sorted(SUPPORTED_QUALITIES))
     gen.add_argument("--output-format", default=DEFAULT_OUTPUT_FORMAT, choices=sorted(SUPPORTED_OUTPUT_FORMATS))
     gen.add_argument("--background", default=DEFAULT_BACKGROUND, choices=sorted(SUPPORTED_BACKGROUNDS))
     gen.add_argument("--moderation", default=DEFAULT_MODERATION, choices=sorted(SUPPORTED_MODERATIONS))
     gen.add_argument("--output-compression", type=int, help="Compression level 0-100. Only valid for jpeg/webp.")
+    gen.add_argument("--complexity", choices=("low", "medium", "high"))
+    gen.add_argument("--markup", help="Transparent PNG overlay for the first edit input.")
+    gen.add_argument("--frame-count", type=int)
+    gen.add_argument("--frame-duration-ms", type=int)
+    gen.add_argument("--svg-model", help="SVG author model, when enabled for the account.")
+    gen.add_argument("--svg-reasoning", choices=("none", "minimal", "low", "medium", "high", "xhigh", "max"))
+    gen.add_argument("--safety-identifier")
     gen.add_argument("--user")
     gen.add_argument("--count", type=int, default=DEFAULT_COUNT, help="Number of images, 1-10.")
     gen.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT)

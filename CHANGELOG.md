@@ -6,6 +6,9 @@ Release notes are generated from this file. Keep changelog entries in English.
 
 ### Features
 
+- Accept only GPT Image 2.6 Flare and Sunburst. Default to Flare.
+- Add complexity, markup, SVG author options, GIF frame controls and safety identifier to Codex Images requests.
+
 - Default to GPT Image 2.5 Flare and support Sunburst selection, xhigh/max quality, and transparent PNG/WebP output with model-specific validation. (#5)
 
 - Add the initial Codex GPT Image skill and Codex OAuth image-generation CLI.

@@ -6,8 +6,8 @@ Treat the linked OpenAI documentation as the source of truth when behavior chang
 - Create image: https://developers.openai.com/api/reference/resources/images/methods/generate
 - Create image edit: https://developers.openai.com/api/reference/resources/images/methods/edit
 - Image generation guide: https://developers.openai.com/api/docs/guides/image-generation
-- GPT Image 2.5 Flare: https://developers.openai.com/api/docs/models/gpt-image-2.5-flare
-- GPT Image 2.5 Sunburst: https://developers.openai.com/api/docs/models/gpt-image-2.5-sunburst
+- GPT Image 2.6 Flare: https://developers.openai.com/api/docs/models/gpt-image-2.6-flare
+- GPT Image 2.6 Sunburst: https://developers.openai.com/api/docs/models/gpt-image-2.6-sunburst
 
 ## Codex Request Shape
 
@@ -43,7 +43,7 @@ Edit requests also contain one or more local reference images encoded as base64 
 
 ## Observed OAuth Backend Limits
 
-On 2026-09-11, requests naming Flare and Sunburst returned images; an xhigh transparent PNG and a max-quality edit request also returned usable images. An invalid model name succeeded too, without a model ID in the response. All four valid-name probes requested 1024x1024 but returned other dimensions. These probes do not establish actual model routing or quality enforcement. Public API constraints below describe request validation, not a guarantee that the OAuth backend applies every field.
+On 2026-11-07, the OAuth endpoint returned a transparent PNG and applied a marked edit. The PNG measured 1536×1024 for a 1536×864 request. Neither response identified the image model. GIF returned HTTP 400 (disabled for the request), and an SVG request returned a payload that failed SVG validation.
 
 ## Parameter Selection
 
@@ -56,14 +56,14 @@ For `size`, use an explicit value only when the user asks for a specific dimensi
 
 | API field | CLI flag | Default | Values / constraints | Notes |
 | --- | --- | --- | --- | --- |
-| `model` | `--model` | `gpt-image-2.5-flare` | GPT Image model string | Use `gpt-image-2.5-sunburst` for precise editing; dated snapshots are also accepted. `CODEX_GPT_IMAGE_MODEL` overrides the default. |
+| `model` | `--model` | `gpt-image-2.6-flare` | GPT Image model string | Use `gpt-image-2.6-sunburst` for precise editing. `CODEX_GPT_IMAGE_MODEL` overrides the default. |
 | `prompt` | `--prompt`, `--prompt-file` | Required | Text, up to 32000 chars for GPT image models | Required for generation and edits. Use the user's actual prompt; do not reuse wording from this reference. |
 | `n` | `--count` | `1` | Integer `1` through `10` | Number of generated or edited images. |
-| `size` | `--size` | `auto` | `auto` or `WIDTHxHEIGHT` | For both GPT Image 2.5 models and `gpt-image-2`, both edges must be multiples of 16, max edge <= 3840, aspect ratio <= 3:1, total pixels between 655360 and 8294400. |
-| `quality` | `--quality` | `auto` | `low`, `medium`, `high`, `xhigh`, `max`, `auto` | `xhigh` and `max` require GPT Image 2.5 (including dated snapshots). |
-| `background` | `--background` | `auto` | `auto`, `opaque`, `transparent` | This CLI allows transparency only for GPT Image 2.5 with PNG or WebP output; `gpt-image-2` does not support it. |
+| `size` | `--size` | `auto` | `auto` or `WIDTHxHEIGHT` | For static raster requests in this CLI, both edges must be multiples of 16, max edge <= 3840, aspect ratio <= 3:1, total pixels between 655360 and 8294400. |
+| `quality` | `--quality` | `auto` | `low`, `medium`, `high`, `xhigh`, `max`, `auto` | `xhigh` and `max` require GPT Image 2.6. |
+| `background` | `--background` | `auto` | `auto`, `opaque`, `transparent` | This CLI allows transparency only for GPT Image 2.6 with PNG, WebP or SVG output. |
 | `moderation` | `--moderation` | `auto` | `low`, `auto` | GPT image model moderation strictness. |
-| `output_format` | `--output-format` | `png` | `png`, `jpeg`, `webp` | GPT image models return base64 image data. |
+| `output_format` | `--output-format` | `png` | PNG, JPEG, WebP, SVG, GIF | SVG is generation-only and requires count 1. |
 | `output_compression` | `--output-compression` | `100` for `jpeg` and `webp` | Integer `0` through `100` | Only valid when `output_format` is `jpeg` or `webp`. |
 | `user` | `--user` | Omitted | String | Optional end-user identifier. |
 
@@ -82,6 +82,17 @@ For `size`, use an explicit value only when the user asks for a specific dimensi
 | `partial_images` | Only useful with streaming responses. |
 | `response_format` | Only supported by DALL-E models; GPT image models return base64 image data. |
 | `style` | DALL-E 3 only. |
+
+## GPT Image 2.6 options
+
+| Option | Request field and behavior |
+| --- | --- |
+| `--complexity` | `complexity`: low, medium, high. Omitted by default. |
+| `--markup` | Edit-only transparent PNG annotation on the first input. Mutually exclusive with mask. |
+| `--frame-count` | GIF only. 2–16 frames. |
+| `--frame-duration-ms` | GIF only. 20–2000 ms per frame. GIF accepts still references but excludes masks and output compression. |
+| `--svg-model`, `--svg-reasoning` | Optional SVG author model and reasoning effort, subject to backend access. |
+| `--safety-identifier` | Optional pseudonymous end-user identifier. |
 
 ## Device-Code Login
 
