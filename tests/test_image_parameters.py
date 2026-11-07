@@ -4,8 +4,6 @@ import sys
 import unittest
 import os
 from unittest.mock import patch
-from tempfile import TemporaryDirectory
-import base64
 
 SCRIPT = Path(__file__).resolve().parents[1] / 'skills/codex-gpt-image/scripts/codex_gpt_image.py'
 spec = importlib.util.spec_from_file_location('codex_gpt_image', SCRIPT)
@@ -40,27 +38,14 @@ class ImageParametersTest(unittest.TestCase):
             with self.subTest(size=size), self.assertRaises(cli.CliError):
                 self.body('--size', size)
 
-    def test_svg_output(self):
-        svg = b'<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0h1"/></svg>'
-        with TemporaryDirectory() as directory:
-            path = Path(directory) / 'icon.svg'
-            for payload in (b'not XML', b'<html/>'):
-                with self.assertRaises(cli.CliError):
-                    cli.write_images([(base64.b64encode(payload).decode(), None)], str(path), 'svg')
-                self.assertFalse(path.exists())
-            cli.write_images([(base64.b64encode(svg).decode(), None)], str(path), 'svg')
-            self.assertEqual(path.read_bytes(), svg)
-
     def test_format_constraints(self):
-        for flags in (('--output-format', 'svg', '--count', '2'), ('--frame-count', '2'),
-                      ('--markup', 'overlay.png'), ('--size', '1000x1000'),
-                      ('--background', 'transparent', '--output-format', 'jpg'),
-                      ('--output-format', 'gif', '--frame-count', '17')):
+        for flags in (('--markup', 'overlay.png'),
+                      ('--background', 'transparent', '--output-format', 'jpg')):
             with self.subTest(flags=flags), self.assertRaises(cli.CliError):
                 self.body(*flags)
-        body = self.body('--output-format', 'gif', '--size', '512x512', '--frame-count', '4')
-        self.assertEqual(body['frame_count'], 4)
-        self.assertNotIn('output_compression', body)
+        for fmt in ('svg', 'gif'):
+            with self.subTest(fmt=fmt), self.assertRaises(cli.CliError):
+                cli.normalize_output_format(fmt)
 
 
 if __name__ == '__main__':

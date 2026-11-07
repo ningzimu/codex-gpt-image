@@ -124,7 +124,7 @@ python3 skills/codex-gpt-image/scripts/codex_gpt_image.py generate \
 - This skill does not use `OPENAI_API_KEY` billing.
 - This is not OpenAI's recommended API integration path; the Codex Images backend interface may change or stop working at any time and can be affected by account, product access, or usage rules.
 - Requests go to `https://chatgpt.com/backend-api/codex/images/generations` or `https://chatgpt.com/backend-api/codex/images/edits`.
-- GPT Image 2.6 supports `--background transparent` with PNG, WebP or SVG output.
+- GPT Image 2.6 supports `--background transparent` with PNG or WebP output.
 - If you get 401/403, refresh Codex auth with `codex login`.
 - Never commit `~/.codex/auth.json`.
 
@@ -134,7 +134,7 @@ Choose `gpt-image-2.6-flare` (default) or `gpt-image-2.6-sunburst` via `--model`
 
 On 2026-11-07, the OAuth endpoint returned a transparent PNG and applied a marked edit. The PNG measured 1536×1024 for a 1536×864 request. Neither response identified the image model. GIF returned HTTP 400 (disabled for the request), and an SVG request returned a payload that failed SVG validation.
 
-Use `--complexity low|medium|high` for planning effort. For edits, `--markup overlay.png` supplies a transparent annotation matching the first image, mutually exclusive with mask. Request SVG with `--output-format svg --count 1` (generation only). For GIF use `--output-format gif --frame-count 4 --frame-duration-ms 200`. Inspect returned files to verify OAuth backend support.
+Use `--complexity low|medium|high` for planning effort. For edits, `--markup overlay.png` supplies a transparent annotation matching the first image, mutually exclusive with mask.
 
 ## License
 

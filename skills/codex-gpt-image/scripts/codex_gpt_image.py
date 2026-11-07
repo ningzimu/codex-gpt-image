@@ -52,7 +52,7 @@ MAX_RESPONSE_BYTES = 64 * 1024 * 1024
 MAX_BASE64_CHARS = 64 * 1024 * 1024
 MAX_IMAGE_DATA_URL_CHARS = 20_971_520
 SUPPORTED_QUALITIES = {"low", "medium", "high", "xhigh", "max", "auto"}
-SUPPORTED_OUTPUT_FORMATS = {"png", "jpeg", "jpg", "webp", "gif", "svg"}
+SUPPORTED_OUTPUT_FORMATS = {"png", "jpeg", "jpg", "webp"}
 SUPPORTED_BACKGROUNDS = {"opaque", "transparent", "auto"}
 SUPPORTED_MODERATIONS = {"low", "auto"}
 CHATGPT_AUTH_CLAIM = "https://api.openai.com/auth"
@@ -402,13 +402,13 @@ def read_prompt(prompt: str | None, prompt_file: str | None) -> str:
 def normalize_output_format(value: str | None) -> str:
     fmt = (value or DEFAULT_OUTPUT_FORMAT).lower()
     if fmt not in SUPPORTED_OUTPUT_FORMATS:
-        raise CliError("output format must be png, jpeg, jpg, webp, gif, or svg.")
+        raise CliError("output format must be png, jpeg, jpg, or webp.")
     return "jpeg" if fmt == "jpg" else fmt
 
 
 def validate_background(value: str, output_format: str) -> None:
-    if value == "transparent" and output_format not in {"png", "webp", "svg"}:
-        raise CliError("Transparent backgrounds require PNG, WebP, or SVG output.")
+    if value == "transparent" and output_format not in {"png", "webp"}:
+        raise CliError("Transparent backgrounds require PNG or WebP output.")
 
 
 def validate_moderation(value: str | None) -> None:
@@ -438,17 +438,13 @@ def parse_size(value: str) -> tuple[int, int] | None:
     return int(match.group(1)), int(match.group(2))
 
 
-def validate_size(size: str, output_format: str) -> None:
+def validate_size(size: str) -> None:
     if size == "auto":
         return
     parsed = parse_size(size)
     if parsed is None:
         raise CliError("size must be auto or WIDTHxHEIGHT, for example 1024x1024.")
     width, height = parsed
-    if output_format == "gif":
-        if width % 16 or height % 16:
-            raise CliError("GIF frame dimensions must be multiples of 16.")
-        return
     max_edge = max(width, height)
     min_edge = min(width, height)
     pixels = width * height
@@ -508,25 +504,10 @@ def build_image_body(args: argparse.Namespace, prompt: str, image_paths: list[st
         raise CliError(f"Unsupported model {image_model!r}. Choose from {', '.join(SUPPORTED_MODELS)}.")
     if args.markup and (not image_paths or args.mask):
         raise CliError("--markup requires --image and cannot be combined with --mask.")
-    if output_format == "svg" and (image_paths or args.count != 1):
-        raise CliError("SVG requires generation with --count 1.")
-    if args.svg_reasoning and not args.svg_model:
-        raise CliError("--svg-reasoning requires --svg-model.")
-    if args.svg_model and output_format != "svg":
-        raise CliError("--svg-model requires SVG output.")
-    if args.frame_count is not None or args.frame_duration_ms is not None:
-        if output_format != "gif":
-            raise CliError("Frame settings require GIF output.")
-    if args.frame_count is not None and not 2 <= args.frame_count <= 16:
-        raise CliError("--frame-count must be between 2 and 16.")
-    if args.frame_duration_ms is not None and not 20 <= args.frame_duration_ms <= 2000:
-        raise CliError("--frame-duration-ms must be between 20 and 2000.")
-    if output_format == "gif" and args.mask:
-        raise CliError("GIF output cannot be combined with a mask.")
     validate_background(args.background, output_format)
     validate_moderation(args.moderation)
     validate_output_compression(output_compression, output_format)
-    validate_size(args.size, output_format)
+    validate_size(args.size)
 
     body: dict[str, Any] = {
         "prompt": prompt,
@@ -536,14 +517,10 @@ def build_image_body(args: argparse.Namespace, prompt: str, image_paths: list[st
         "quality": args.quality,
         "output_format": output_format,
     }
-    for field in ("complexity", "frame_count", "frame_duration_ms", "safety_identifier"):
+    for field in ("complexity", "safety_identifier"):
         value = getattr(args, field)
         if value is not None:
             body[field] = value
-    if args.svg_model:
-        body["svg"] = {"model": args.svg_model}
-        if args.svg_reasoning:
-            body["svg"]["reasoning"] = {"effort": args.svg_reasoning}
     if args.background:
         body["background"] = args.background
     if args.moderation:
@@ -644,16 +621,6 @@ def write_images(payloads: list[tuple[str, str | None]], out: str, output_format
         if len(payload) > MAX_BASE64_CHARS:
             raise CliError("Image payload exceeded size limit.")
         data = base64.b64decode(payload)
-        if output_format == "gif" and data[:6] not in (b"GIF87a", b"GIF89a"):
-            raise CliError("Backend returned a different format than the requested GIF.")
-        if output_format == "svg":
-            from xml.etree import ElementTree
-            try:
-                root = ElementTree.fromstring(data)
-            except ElementTree.ParseError as exc:
-                raise CliError("Backend did not return SVG XML.") from exc
-            if root.tag not in ("svg", "{http://www.w3.org/2000/svg}svg"):
-                raise CliError("Backend did not return an SVG document.")
         path = target
         if multi:
             stem = target.stem or "image"
@@ -710,7 +677,7 @@ def cmd_generate(args: argparse.Namespace) -> int:
             "input_images": len(image_paths),
             "mask": bool(args.mask),
             "markup": bool(args.markup),
-            **{key: body[key] for key in ("complexity", "frame_count", "frame_duration_ms", "svg", "safety_identifier") if key in body},
+            **{key: body[key] for key in ("complexity", "safety_identifier") if key in body},
             "count": args.count,
         }
         print(json.dumps(summary, ensure_ascii=False, indent=2))
@@ -763,10 +730,6 @@ def build_parser() -> argparse.ArgumentParser:
     gen.add_argument("--output-compression", type=int, help="Compression level 0-100. Only valid for jpeg/webp.")
     gen.add_argument("--complexity", choices=("low", "medium", "high"))
     gen.add_argument("--markup", help="Transparent PNG overlay for the first edit input.")
-    gen.add_argument("--frame-count", type=int)
-    gen.add_argument("--frame-duration-ms", type=int)
-    gen.add_argument("--svg-model", help="SVG author model, when enabled for the account.")
-    gen.add_argument("--svg-reasoning", choices=("none", "minimal", "low", "medium", "high", "xhigh", "max"))
     gen.add_argument("--safety-identifier")
     gen.add_argument("--user")
     gen.add_argument("--count", type=int, default=DEFAULT_COUNT, help="Number of images, 1-10.")

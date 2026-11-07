@@ -61,9 +61,9 @@ For `size`, use an explicit value only when the user asks for a specific dimensi
 | `n` | `--count` | `1` | Integer `1` through `10` | Number of generated or edited images. |
 | `size` | `--size` | `auto` | `auto` or `WIDTHxHEIGHT` | For static raster requests in this CLI, both edges must be multiples of 16, max edge <= 3840, aspect ratio <= 3:1, total pixels between 655360 and 8294400. |
 | `quality` | `--quality` | `auto` | `low`, `medium`, `high`, `xhigh`, `max`, `auto` | `xhigh` and `max` require GPT Image 2.6. |
-| `background` | `--background` | `auto` | `auto`, `opaque`, `transparent` | This CLI allows transparency only for GPT Image 2.6 with PNG, WebP or SVG output. |
+| `background` | `--background` | `auto` | `auto`, `opaque`, `transparent` | This CLI allows transparency only for GPT Image 2.6 with PNG or WebP output. |
 | `moderation` | `--moderation` | `auto` | `low`, `auto` | GPT image model moderation strictness. |
-| `output_format` | `--output-format` | `png` | PNG, JPEG, WebP, SVG, GIF | SVG is generation-only and requires count 1. |
+| `output_format` | `--output-format` | `png` | PNG, JPEG, WebP | GIF and SVG are unsupported. |
 | `output_compression` | `--output-compression` | `100` for `jpeg` and `webp` | Integer `0` through `100` | Only valid when `output_format` is `jpeg` or `webp`. |
 | `user` | `--user` | Omitted | String | Optional end-user identifier. |
 
@@ -89,9 +89,6 @@ For `size`, use an explicit value only when the user asks for a specific dimensi
 | --- | --- |
 | `--complexity` | `complexity`: low, medium, high. Omitted by default. |
 | `--markup` | Edit-only transparent PNG annotation on the first input. Mutually exclusive with mask. |
-| `--frame-count` | GIF only. 2–16 frames. |
-| `--frame-duration-ms` | GIF only. 20–2000 ms per frame. GIF accepts still references but excludes masks and output compression. |
-| `--svg-model`, `--svg-reasoning` | Optional SVG author model and reasoning effort, subject to backend access. |
 | `--safety-identifier` | Optional pseudonymous end-user identifier. |
 
 ## Device-Code Login

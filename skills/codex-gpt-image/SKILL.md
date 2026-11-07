@@ -94,4 +94,4 @@ It parses the JSON Images response and writes returned base64 image payloads to 
 Choose `gpt-image-2.6-flare` (default) or `gpt-image-2.6-sunburst` via `--model` or `CODEX_GPT_IMAGE_MODEL`. Only these exact names are accepted.
 
 On 2026-11-07, the OAuth endpoint returned a transparent PNG and applied a marked edit. The PNG measured 1536×1024 for a 1536×864 request. Neither response identified the image model. GIF returned HTTP 400 (disabled for the request), and an SVG request returned a payload that failed SVG validation.
-Use `--complexity low|medium|high` for planning effort. For edits, `--markup overlay.png` supplies a transparent annotation matching the first image, mutually exclusive with mask. Request SVG with `--output-format svg --count 1` (generation only). For GIF use `--output-format gif --frame-count 4 --frame-duration-ms 200`. Inspect returned files to verify OAuth backend support.
+Use `--complexity low|medium|high` for planning effort. For edits, `--markup overlay.png` supplies a transparent annotation matching the first image, mutually exclusive with mask.
