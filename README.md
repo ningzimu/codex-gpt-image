@@ -20,7 +20,7 @@
 - 默认使用 `gpt-image-2.6-flare`，支持 `low`、`medium`、`high`、`xhigh`、`max`、`auto` 质量参数
 - 支持文本生图和多参考图编辑
 - 支持 `gpt-image-2.6-flare` 合法尺寸校验
-- 支持官方 Images API 的常用参数：`background`、`moderation`、`output_format`、`output_compression`、`mask`
+- 支持官方 Images API 的常用参数：`background`、`moderation`、`output_format`、`mask`
 - 纯 Python 标准库脚本，便于在任意 agent 环境里调用
 
 ## 目录结构
@@ -148,7 +148,7 @@ python3 skills/codex-gpt-image/scripts/codex_gpt_image.py generate \
 - 这不是 OpenAI API key 方案，不使用 `OPENAI_API_KEY` 计费。
 - 这不是 OpenAI 官方推荐的 API 集成方式；Codex Images 后端接口可能随时变更或失效，也可能受到账号、产品权限或用量规则影响。
 - 请求会发到 Codex Images 后端：`https://chatgpt.com/backend-api/codex/images/generations` 或 `https://chatgpt.com/backend-api/codex/images/edits`。
-- GPT Image 2.6 支持透明背景：使用 `--background transparent` 并选择 PNG 或 WebP。
+- GPT Image 2.6 支持透明背景：使用 `--background transparent` 并选择 PNG。
 - Codex OAuth token 可能过期；遇到 401/403 时先重新登录 Codex。
 - 不要把 `~/.codex/auth.json` 提交到任何仓库。
 
@@ -156,7 +156,7 @@ python3 skills/codex-gpt-image/scripts/codex_gpt_image.py generate \
 
 默认请求 `gpt-image-2.6-flare`。精确编辑可选择 `gpt-image-2.6-sunburst`。CLI 仅接受这两个模型名，包括通过 `CODEX_GPT_IMAGE_MODEL` 指定时。
 
-2026-11-07 OAuth 实测得到透明 PNG，标注编辑也成功。请求 1536×864，实际返回 1536×1024。两次响应均未报告图像模型 ID。GIF 请求返回 HTTP 400（未开放），SVG 请求返回的内容未通过 SVG 校验。
+2026-11-07 OAuth 实测得到透明 PNG，参考图编辑也成功。请求 1536×864，实际返回 1536×1024。mask 和 markup 对照测试未能可靠定位指定区域。响应未报告图像模型 ID。GIF 请求返回 HTTP 400（未开放），SVG 请求返回的内容未通过 SVG 校验。
 
 2.6 可请求 `--complexity low|medium|high`。编辑时可通过 `--markup overlay.png` 标注第一张图，标注层须同尺寸且透明，与 mask 互斥。
 

@@ -21,7 +21,7 @@ The skill reads the local `~/.codex/auth.json` and calls the Codex Images backen
 - Defaults to `gpt-image-2.6-flare`
 - Supports text-to-image and reference-image editing
 - Validates legal `gpt-image-2.6-flare` output dimensions
-- Supports common official Images API parameters: `background`, `moderation`, `output_format`, `output_compression`, and `mask`
+- Supports common official Images API parameters: `background`, `moderation`, `output_format`, and `mask`
 - Pure Python standard-library CLI
 
 ## Install
@@ -124,7 +124,7 @@ python3 skills/codex-gpt-image/scripts/codex_gpt_image.py generate \
 - This skill does not use `OPENAI_API_KEY` billing.
 - This is not OpenAI's recommended API integration path; the Codex Images backend interface may change or stop working at any time and can be affected by account, product access, or usage rules.
 - Requests go to `https://chatgpt.com/backend-api/codex/images/generations` or `https://chatgpt.com/backend-api/codex/images/edits`.
-- GPT Image 2.6 supports `--background transparent` with PNG or WebP output.
+- GPT Image 2.6 supports `--background transparent` with PNG output.
 - If you get 401/403, refresh Codex auth with `codex login`.
 - Never commit `~/.codex/auth.json`.
 
@@ -132,7 +132,7 @@ python3 skills/codex-gpt-image/scripts/codex_gpt_image.py generate \
 
 Choose `gpt-image-2.6-flare` (default) or `gpt-image-2.6-sunburst` via `--model` or `CODEX_GPT_IMAGE_MODEL`. Only these exact names are accepted.
 
-On 2026-11-07, the OAuth endpoint returned a transparent PNG and applied a marked edit. The PNG measured 1536×1024 for a 1536×864 request. Neither response identified the image model. GIF returned HTTP 400 (disabled for the request), and an SVG request returned a payload that failed SVG validation.
+On 2026-11-07, the OAuth endpoint returned a transparent PNG and edited a reference image. The PNG measured 1536×1024 for a 1536×864 request. Mask and markup probes did not reliably select the requested region. The backend did not identify the image model. GIF returned HTTP 400 (disabled for the request), and an SVG request returned a payload that failed SVG validation.
 
 Use `--complexity low|medium|high` for planning effort. For edits, `--markup overlay.png` supplies a transparent annotation matching the first image, mutually exclusive with mask.
 

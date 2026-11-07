@@ -38,7 +38,6 @@ SUPPORTED_MODELS = (DEFAULT_IMAGE_MODEL, "gpt-image-2.6-sunburst")
 DEFAULT_SIZE = "auto"
 DEFAULT_QUALITY = "auto"
 DEFAULT_OUTPUT_FORMAT = "png"
-DEFAULT_OUTPUT_COMPRESSION = 100
 DEFAULT_BACKGROUND = "auto"
 DEFAULT_MODERATION = "auto"
 DEFAULT_TIMEOUT = 600
@@ -52,7 +51,6 @@ MAX_RESPONSE_BYTES = 64 * 1024 * 1024
 MAX_BASE64_CHARS = 64 * 1024 * 1024
 MAX_IMAGE_DATA_URL_CHARS = 20_971_520
 SUPPORTED_QUALITIES = {"low", "medium", "high", "xhigh", "max", "auto"}
-SUPPORTED_OUTPUT_FORMATS = {"png", "jpeg", "jpg", "webp"}
 SUPPORTED_BACKGROUNDS = {"opaque", "transparent", "auto"}
 SUPPORTED_MODERATIONS = {"low", "auto"}
 CHATGPT_AUTH_CLAIM = "https://api.openai.com/auth"
@@ -399,36 +397,9 @@ def read_prompt(prompt: str | None, prompt_file: str | None) -> str:
     return text
 
 
-def normalize_output_format(value: str | None) -> str:
-    fmt = (value or DEFAULT_OUTPUT_FORMAT).lower()
-    if fmt not in SUPPORTED_OUTPUT_FORMATS:
-        raise CliError("output format must be png, jpeg, jpg, or webp.")
-    return "jpeg" if fmt == "jpg" else fmt
-
-
-def validate_background(value: str, output_format: str) -> None:
-    if value == "transparent" and output_format not in {"png", "webp"}:
-        raise CliError("Transparent backgrounds require PNG or WebP output.")
-
-
 def validate_moderation(value: str | None) -> None:
     if value is not None and value not in SUPPORTED_MODERATIONS:
         raise CliError("moderation must be low or auto.")
-
-
-def validate_output_compression(value: int | None, output_format: str) -> None:
-    if value is None:
-        return
-    if value < 0 or value > 100:
-        raise CliError("output-compression must be between 0 and 100.")
-    if output_format not in {"jpeg", "webp"}:
-        raise CliError("output-compression is only supported for jpeg or webp output.")
-
-
-def default_output_compression(output_format: str) -> int | None:
-    if output_format in {"jpeg", "webp"}:
-        return DEFAULT_OUTPUT_COMPRESSION
-    return None
 
 
 def parse_size(value: str) -> tuple[int, int] | None:
@@ -493,20 +464,11 @@ def build_image_body(args: argparse.Namespace, prompt: str, image_paths: list[st
         raise CliError("--mask can only be used with at least one --image input.")
 
     image_model = args.model
-    output_format = normalize_output_format(args.output_format)
-    output_compression = (
-        args.output_compression
-        if args.output_compression is not None
-        else default_output_compression(output_format)
-    )
-
     if image_model not in SUPPORTED_MODELS:
         raise CliError(f"Unsupported model {image_model!r}. Choose from {', '.join(SUPPORTED_MODELS)}.")
     if args.markup and (not image_paths or args.mask):
         raise CliError("--markup requires --image and cannot be combined with --mask.")
-    validate_background(args.background, output_format)
     validate_moderation(args.moderation)
-    validate_output_compression(output_compression, output_format)
     validate_size(args.size)
 
     body: dict[str, Any] = {
@@ -515,7 +477,7 @@ def build_image_body(args: argparse.Namespace, prompt: str, image_paths: list[st
         "n": args.count,
         "size": args.size,
         "quality": args.quality,
-        "output_format": output_format,
+        "output_format": DEFAULT_OUTPUT_FORMAT,
     }
     for field in ("complexity", "safety_identifier"):
         value = getattr(args, field)
@@ -525,8 +487,6 @@ def build_image_body(args: argparse.Namespace, prompt: str, image_paths: list[st
         body["background"] = args.background
     if args.moderation:
         body["moderation"] = args.moderation
-    if output_compression is not None:
-        body["output_compression"] = output_compression
     if args.user:
         body["user"] = args.user
 
@@ -609,22 +569,23 @@ def extract_image_payloads(response: dict[str, Any]) -> list[tuple[str, str | No
     return payloads
 
 
-def write_images(payloads: list[tuple[str, str | None]], out: str, output_format: str) -> list[Path]:
+def write_images(payloads: list[tuple[str, str | None]], out: str) -> list[Path]:
     if not payloads:
         raise CliError("No image payload found in Codex response.")
     target = Path(out)
     target.parent.mkdir(parents=True, exist_ok=True)
-    ext = "jpg" if output_format == "jpeg" else output_format
     multi = len(payloads) > 1
     written: list[Path] = []
     for index, (payload, _revised_prompt) in enumerate(payloads, start=1):
         if len(payload) > MAX_BASE64_CHARS:
             raise CliError("Image payload exceeded size limit.")
         data = base64.b64decode(payload)
+        if not data.startswith(b"\x89PNG\r\n\x1a\n"):
+            raise CliError("Expected a PNG payload from the backend.")
         path = target
         if multi:
             stem = target.stem or "image"
-            suffix = target.suffix or f".{ext}"
+            suffix = target.suffix or ".png"
             path = target.with_name(f"{stem}-{index:02d}{suffix}")
         path.write_bytes(data)
         written.append(path)
@@ -658,7 +619,8 @@ def cmd_generate(args: argparse.Namespace) -> int:
     image_paths = args.image or []
     if args.count < 1 or args.count > MAX_COUNT:
         raise CliError(f"--count must be between 1 and {MAX_COUNT}.")
-    output_format = normalize_output_format(args.output_format)
+    if args.out and Path(args.out).suffix.lower() != ".png":
+        raise CliError("--out requires a .png filename.")
     operation, image_model, body = build_image_body(args, prompt, image_paths)
     url = image_endpoint_url(args.base_url, operation)
 
@@ -670,10 +632,9 @@ def cmd_generate(args: argparse.Namespace) -> int:
             "image_model": image_model,
             "size": body["size"],
             "quality": body.get("quality"),
-            "output_format": output_format,
+            "output_format": DEFAULT_OUTPUT_FORMAT,
             "background": body.get("background"),
             "moderation": body.get("moderation"),
-            "output_compression": body.get("output_compression"),
             "input_images": len(image_paths),
             "mask": bool(args.mask),
             "markup": bool(args.markup),
@@ -686,7 +647,7 @@ def cmd_generate(args: argparse.Namespace) -> int:
     auth = load_or_login_codex_auth(args)
     start = time.time()
     response = post_image_json(url, auth, body, args.timeout)
-    written = write_images(extract_image_payloads(response), args.out or f"output/codex-gpt-image/output.{output_format}", output_format)
+    written = write_images(extract_image_payloads(response), args.out or "output/codex-gpt-image/output.png")
     for path in written:
         print(path)
     eprint(f"Generated {len(written)} image(s) via Codex OAuth in {time.time() - start:.1f}s.")
@@ -724,10 +685,9 @@ def build_parser() -> argparse.ArgumentParser:
     gen.add_argument("--model", choices=SUPPORTED_MODELS, default=os.getenv("CODEX_GPT_IMAGE_MODEL", DEFAULT_IMAGE_MODEL))
     gen.add_argument("--size", default=DEFAULT_SIZE)
     gen.add_argument("--quality", default=DEFAULT_QUALITY, choices=sorted(SUPPORTED_QUALITIES))
-    gen.add_argument("--output-format", default=DEFAULT_OUTPUT_FORMAT, choices=sorted(SUPPORTED_OUTPUT_FORMATS))
+    gen.add_argument("--output-format", default=DEFAULT_OUTPUT_FORMAT, choices=(DEFAULT_OUTPUT_FORMAT,))
     gen.add_argument("--background", default=DEFAULT_BACKGROUND, choices=sorted(SUPPORTED_BACKGROUNDS))
     gen.add_argument("--moderation", default=DEFAULT_MODERATION, choices=sorted(SUPPORTED_MODERATIONS))
-    gen.add_argument("--output-compression", type=int, help="Compression level 0-100. Only valid for jpeg/webp.")
     gen.add_argument("--complexity", choices=("low", "medium", "high"))
     gen.add_argument("--markup", help="Transparent PNG overlay for the first edit input.")
     gen.add_argument("--safety-identifier")

@@ -43,7 +43,7 @@ Edit requests also contain one or more local reference images encoded as base64 
 
 ## Observed OAuth Backend Limits
 
-On 2026-11-07, the OAuth endpoint returned a transparent PNG and applied a marked edit. The PNG measured 1536×1024 for a 1536×864 request. Neither response identified the image model. GIF returned HTTP 400 (disabled for the request), and an SVG request returned a payload that failed SVG validation.
+On 2026-11-07, the OAuth endpoint returned a transparent PNG and edited a reference image. The PNG measured 1536×1024 for a 1536×864 request. Mask and markup probes did not reliably select the requested region. The backend did not identify the image model. GIF returned HTTP 400 (disabled for the request), and an SVG request returned a payload that failed SVG validation.
 
 ## Parameter Selection
 
@@ -61,10 +61,9 @@ For `size`, use an explicit value only when the user asks for a specific dimensi
 | `n` | `--count` | `1` | Integer `1` through `10` | Number of generated or edited images. |
 | `size` | `--size` | `auto` | `auto` or `WIDTHxHEIGHT` | For static raster requests in this CLI, both edges must be multiples of 16, max edge <= 3840, aspect ratio <= 3:1, total pixels between 655360 and 8294400. |
 | `quality` | `--quality` | `auto` | `low`, `medium`, `high`, `xhigh`, `max`, `auto` | `xhigh` and `max` require GPT Image 2.6. |
-| `background` | `--background` | `auto` | `auto`, `opaque`, `transparent` | This CLI allows transparency only for GPT Image 2.6 with PNG or WebP output. |
+| `background` | `--background` | `auto` | `auto`, `opaque`, `transparent` | This CLI allows transparency only for GPT Image 2.6 with PNG output. |
 | `moderation` | `--moderation` | `auto` | `low`, `auto` | GPT image model moderation strictness. |
-| `output_format` | `--output-format` | `png` | PNG, JPEG, WebP | GIF and SVG are unsupported. |
-| `output_compression` | `--output-compression` | `100` for `jpeg` and `webp` | Integer `0` through `100` | Only valid when `output_format` is `jpeg` or `webp`. |
+| `output_format` | `--output-format` | `png` | PNG | The CLI verifies the PNG signature before saving. |
 | `user` | `--user` | Omitted | String | Optional end-user identifier. |
 
 ## Edit-Only Parameters

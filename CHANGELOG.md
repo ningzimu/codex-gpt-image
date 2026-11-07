@@ -6,6 +6,7 @@ Release notes are generated from this file. Keep changelog entries in English.
 
 ### Features
 
+- Save PNG output only and remove the output compression option.
 - Accept only GPT Image 2.6 Flare and Sunburst. Default to Flare.
 - Add complexity, markup and safety identifier to Codex Images requests.
 

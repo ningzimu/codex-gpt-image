@@ -38,14 +38,16 @@ class ImageParametersTest(unittest.TestCase):
             with self.subTest(size=size), self.assertRaises(cli.CliError):
                 self.body('--size', size)
 
-    def test_format_constraints(self):
-        for flags in (('--markup', 'overlay.png'),
-                      ('--background', 'transparent', '--output-format', 'jpg')):
-            with self.subTest(flags=flags), self.assertRaises(cli.CliError):
+    def test_png_only(self):
+        import contextlib
+        import io
+        self.assertEqual(self.body()['output_format'], 'png')
+        for flags in (('--output-format', 'jpeg'), ('--output-format', 'webp'),
+                      ('--output-compression', '50')):
+            with self.subTest(flags=flags), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
                 self.body(*flags)
-        for fmt in ('svg', 'gif'):
-            with self.subTest(fmt=fmt), self.assertRaises(cli.CliError):
-                cli.normalize_output_format(fmt)
+        with self.assertRaises(cli.CliError):
+            self.body('--markup', 'overlay.png')
 
 
 if __name__ == '__main__':
