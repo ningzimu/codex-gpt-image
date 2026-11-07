@@ -6,6 +6,8 @@ Release notes are generated from this file. Keep changelog entries in English.
 
 ### Features
 
+- Simplify image requests to a required prompt, optional references and optional transparent background. Save PNG output and let Codex select the model. (#6)
+
 - Default to GPT Image 2.5 Flare and support Sunburst selection, xhigh/max quality, and transparent PNG/WebP output with model-specific validation. (#5)
 
 - Add the initial Codex GPT Image skill and Codex OAuth image-generation CLI.

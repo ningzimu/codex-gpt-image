@@ -2,26 +2,9 @@
 
 [![English](https://img.shields.io/badge/docs-English-blue)](README_en.md) [![Skill](https://img.shields.io/badge/skill-codex--gpt--image-cd3b35)](skills/codex-gpt-image)
 
-一个面向 **OpenClaw / Claude Code / Codex / Hermes Agent** 的 `SKILL.md` 生图 skill：通过 **Codex OAuth / ChatGPT 登录态** 调用 `gpt-image-2.5-flare`，不需要 `OPENAI_API_KEY`。
+一个面向 **OpenClaw / Claude Code / Codex / Hermes Agent** 的 `SKILL.md` 生图 skill：通过 **Codex OAuth / ChatGPT 登录态** 生成或编辑 PNG 图片，不需要 `OPENAI_API_KEY`。
 
 它读取本机 `~/.codex/auth.json`，请求 Codex Images 后端 `https://chatgpt.com/backend-api/codex/images/generations` 或 `https://chatgpt.com/backend-api/codex/images/edits`，让 agent 复用已有 Codex / ChatGPT 订阅权限生成图片。
-
-## 适合谁用
-
-- 想在 OpenClaw / Claude Code / Codex / Hermes Agent 里直接用 `gpt-image-2.5-flare` 生图
-- 已经有 Codex / ChatGPT OAuth 登录态，不想再配置 OpenAI API key
-- 想把同一套 GPT Image skill 复用到多个支持 `SKILL.md` 的 agent
-- 需要文本生图、参考图编辑，或在用户明确要求时指定合法输出尺寸
-
-## 特点
-
-- OpenClaw skill / Claude Code skill / Codex skill / Hermes Agent skill
-- Codex OAuth：读取 `~/.codex/auth.json`，不要求 OpenAI API key
-- 默认使用 `gpt-image-2.5-flare`，支持 `low`、`medium`、`high`、`xhigh`、`max`、`auto` 质量参数
-- 支持文本生图和多参考图编辑
-- 支持 `gpt-image-2.5-flare` 合法尺寸校验
-- 支持官方 Images API 的常用参数：`background`、`moderation`、`output_format`、`output_compression`、`mask`
-- 纯 Python 标准库脚本，便于在任意 agent 环境里调用
 
 ## 目录结构
 
@@ -95,68 +78,18 @@ python3 skills/codex-gpt-image/scripts/codex_gpt_image.py login
 
 ## 使用方式
 
-检查 Codex OAuth：
+通过 `--prompt` 或 `--prompt-file` 提供提示词，二选一。其余参数均可选。
 
-```bash
-python3 skills/codex-gpt-image/scripts/codex_gpt_image.py auth-status
+- 省略 `--image` 时，CLI 调用 `/images/generations`。传入一张或多张参考图时，CLI 调用 `/images/edits`。每张图用一个 `--image`，顺序与命令行一致。
+- 加上 `--transparent-background` 会请求透明 PNG。省略时由后端决定背景，结果也可能透明。
+- 用 `generate --help` 查看全部选项。用 `--dry-run` 可在发送前查看所选接口和请求字段。
+
+```sh
+python3 skills/codex-gpt-image/scripts/codex_gpt_image.py generate --prompt "A blue mug"
+python3 skills/codex-gpt-image/scripts/codex_gpt_image.py generate --prompt "Make the mug green" --image mug.png --transparent-background --out edited.png
 ```
 
-如果缺少 auth，可以让检查命令自动进入 device-code 登录：
-
-```bash
-python3 skills/codex-gpt-image/scripts/codex_gpt_image.py auth-status --login-if-missing
-```
-
-生成图片：
-
-```bash
-python3 skills/codex-gpt-image/scripts/codex_gpt_image.py generate \
-  --prompt "A polished launch poster for a terminal AI image tool" \
-  --out output/codex-gpt-image/poster.png
-```
-
-生成命令也支持 `--login-if-missing`，适合 agent 第一次使用时自动引导登录：
-
-```bash
-python3 skills/codex-gpt-image/scripts/codex_gpt_image.py generate \
-  --login-if-missing \
-  --prompt "A polished launch poster for a terminal AI image tool" \
-  --out output/codex-gpt-image/poster.png
-```
-
-使用参考图编辑：
-
-```bash
-python3 skills/codex-gpt-image/scripts/codex_gpt_image.py generate \
-  --image /path/to/reference.png \
-  --prompt "Preserve the layout, turn it into a clean editorial illustration" \
-  --out output/codex-gpt-image/edited.png
-```
-
-使用 mask 局部编辑：
-
-```bash
-python3 skills/codex-gpt-image/scripts/codex_gpt_image.py generate \
-  --image /path/to/source.png \
-  --mask /path/to/mask.png \
-  --prompt "Replace the masked area with a flamingo float" \
-  --out output/codex-gpt-image/masked-edit.png
-```
-
-## 注意
-
-- 这不是 OpenAI API key 方案，不使用 `OPENAI_API_KEY` 计费。
-- 这不是 OpenAI 官方推荐的 API 集成方式；Codex Images 后端接口可能随时变更或失效，也可能受到账号、产品权限或用量规则影响。
-- 请求会发到 Codex Images 后端：`https://chatgpt.com/backend-api/codex/images/generations` 或 `https://chatgpt.com/backend-api/codex/images/edits`。
-- GPT Image 2.5 支持透明背景：使用 `--background transparent` 并选择 PNG 或 WebP；旧模型 `gpt-image-2` 仍不支持。
-- Codex OAuth token 可能过期；遇到 401/403 时先重新登录 Codex。
-- 不要把 `~/.codex/auth.json` 提交到任何仓库。
-
-### GPT Image 2.5 模型选择
-
-默认使用 `gpt-image-2.5-flare`；精确编辑可用 `--model gpt-image-2.5-sunburst`。两款模型及其日期快照支持 `xhigh`、`max` 质量档位。可通过 `CODEX_GPT_IMAGE_MODEL` 覆盖默认模型，或显式选择旧模型 `--model gpt-image-2`。OAuth 可用性取决于账号和后端开放情况。
-
-实测边界：2026-09-11 的 Codex OAuth 测试中，两款 2.5 模型名均返回图片，编辑与透明 PNG 也成功；但不存在的模型名同样成功，响应未提供实际模型 ID，且实际尺寸与请求尺寸不一致。因此这些结果只证明链路可用，不能证明后端遵循模型或质量选择。CLI 会区分请求模型和后端报告模型。
+默认输出 `output/codex-gpt-image/output.png`。模型由 Codex 后端选择，响应可能省略模型 ID。
 
 ## 许可证
 

@@ -2,27 +2,9 @@
 
 [![中文](https://img.shields.io/badge/docs-中文-blue)](README.md) [![Skill](https://img.shields.io/badge/skill-codex--gpt--image-cd3b35)](skills/codex-gpt-image)
 
-A `SKILL.md` image-generation skill for **OpenClaw, Claude Code, Codex, Hermes Agent**, and other skill-capable agents. It generates images with **`gpt-image-2.5-flare` via Codex OAuth / ChatGPT login**, without requiring `OPENAI_API_KEY`.
+A `SKILL.md` image-generation skill for **OpenClaw, Claude Code, Codex, Hermes Agent**, and other skill-capable agents. It generates images with Codex OAuth / ChatGPT login, without requiring `OPENAI_API_KEY`.
 
 The skill reads the local `~/.codex/auth.json` and calls the Codex Images backend at `https://chatgpt.com/backend-api/codex/images/generations` or `https://chatgpt.com/backend-api/codex/images/edits` so agents can reuse an existing Codex / ChatGPT subscription session.
-
-## Who this is for
-
-- You want `gpt-image-2.5-flare` image generation inside OpenClaw, Claude Code, Codex, or Hermes Agent.
-- You already have Codex / ChatGPT OAuth login and do not want to configure an OpenAI API key.
-- You want one GPT Image skill that works across multiple `SKILL.md`-capable agents.
-- You need text-to-image, reference-image editing, or explicit legal output dimensions when the user asks for them.
-
-## Features
-
-- OpenClaw skill / Claude Code skill / Codex skill / Hermes Agent skill
-- Codex OAuth auth from `~/.codex/auth.json`
-- No OpenAI API key required
-- Defaults to `gpt-image-2.5-flare`
-- Supports text-to-image and reference-image editing
-- Validates legal `gpt-image-2.5-flare` output dimensions
-- Supports common official Images API parameters: `background`, `moderation`, `output_format`, `output_compression`, and `mask`
-- Pure Python standard-library CLI
 
 ## Install
 
@@ -71,68 +53,18 @@ python3 skills/codex-gpt-image/scripts/codex_gpt_image.py login
 
 ## Usage
 
-Check auth:
+Supply the prompt with either `--prompt` or `--prompt-file`. All other options are optional.
 
-```bash
-python3 skills/codex-gpt-image/scripts/codex_gpt_image.py auth-status
+- Omit `--image` to call `/images/generations`. Supply one or more reference images to call `/images/edits`. Repeat `--image` once per file in the desired order.
+- Pass `--transparent-background` to request a transparent PNG. If omitted, the backend chooses the background and may still return a transparent image.
+- Run `generate --help` for all options. Add `--dry-run` to preview the endpoint and request fields without sending a request.
+
+```sh
+python3 skills/codex-gpt-image/scripts/codex_gpt_image.py generate --prompt "A blue mug"
+python3 skills/codex-gpt-image/scripts/codex_gpt_image.py generate --prompt "Make the mug green" --image mug.png --transparent-background --out edited.png
 ```
 
-Start device-code login automatically when auth is missing:
-
-```bash
-python3 skills/codex-gpt-image/scripts/codex_gpt_image.py auth-status --login-if-missing
-```
-
-Generate:
-
-```bash
-python3 skills/codex-gpt-image/scripts/codex_gpt_image.py generate \
-  --prompt "A polished launch poster for a terminal AI image tool" \
-  --out output/codex-gpt-image/poster.png
-```
-
-The generate command can also trigger login on first use:
-
-```bash
-python3 skills/codex-gpt-image/scripts/codex_gpt_image.py generate \
-  --login-if-missing \
-  --prompt "A polished launch poster for a terminal AI image tool" \
-  --out output/codex-gpt-image/poster.png
-```
-
-Edit with a reference image:
-
-```bash
-python3 skills/codex-gpt-image/scripts/codex_gpt_image.py generate \
-  --image /path/to/reference.png \
-  --prompt "Preserve the layout, turn it into a clean editorial illustration" \
-  --out output/codex-gpt-image/edited.png
-```
-
-Edit with a mask:
-
-```bash
-python3 skills/codex-gpt-image/scripts/codex_gpt_image.py generate \
-  --image /path/to/source.png \
-  --mask /path/to/mask.png \
-  --prompt "Replace the masked area with a flamingo float" \
-  --out output/codex-gpt-image/masked-edit.png
-```
-
-## Notes
-
-- This skill does not use `OPENAI_API_KEY` billing.
-- This is not OpenAI's recommended API integration path; the Codex Images backend interface may change or stop working at any time and can be affected by account, product access, or usage rules.
-- Requests go to `https://chatgpt.com/backend-api/codex/images/generations` or `https://chatgpt.com/backend-api/codex/images/edits`.
-- GPT Image 2.5 supports `--background transparent` with PNG or WebP output. The older `gpt-image-2` model still does not support transparency.
-- If you get 401/403, refresh Codex auth with `codex login`.
-- Never commit `~/.codex/auth.json`.
-
-### GPT Image 2.5 model selection
-
-The default is `gpt-image-2.5-flare`. Select `--model gpt-image-2.5-sunburst` for precise editing. Both models and their dated snapshots support `xhigh` and `max` quality. Override the default with `CODEX_GPT_IMAGE_MODEL`, or select the older `--model gpt-image-2` explicitly. OAuth availability depends on the account and backend rollout.
-
-Verification boundary: In the 2026-09-11 Codex OAuth probes, both 2.5 model names returned images, including an edit and a transparent PNG. However, an invalid model name also succeeded, responses omitted the actual model ID, and output dimensions differed from the requested size. These results verify the image pipeline, not backend model or quality selection. The CLI distinguishes the requested model from the backend-reported model.
+Default output is `output/codex-gpt-image/output.png`. Codex selects the model and may omit its ID in the response.
 
 ## License
 

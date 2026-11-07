@@ -33,33 +33,16 @@ OPENAI_AUTH_BASE_URL = "https://auth.openai.com"
 DEFAULT_OPENAI_CODEX_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
 CODEX_CLIENT_ID_ENV_VAR = "CODEX_APP_SERVER_LOGIN_CLIENT_ID"
 OPENAI_CODEX_DEVICE_CALLBACK_URL = f"{OPENAI_AUTH_BASE_URL}/deviceauth/callback"
-DEFAULT_IMAGE_MODEL = "gpt-image-2.5-flare"
-DEFAULT_SIZE = "auto"
-DEFAULT_QUALITY = "auto"
-DEFAULT_OUTPUT_FORMAT = "png"
-DEFAULT_OUTPUT_COMPRESSION = 100
-DEFAULT_BACKGROUND = "auto"
-DEFAULT_MODERATION = "auto"
 DEFAULT_TIMEOUT = 600
-DEFAULT_COUNT = 1
 DEVICE_CODE_TIMEOUT = 15 * 60
 DEVICE_CODE_DEFAULT_INTERVAL = 5
 DEVICE_CODE_MIN_INTERVAL = 1
-MAX_COUNT = 10
 MAX_INPUT_IMAGES = 16
 MAX_RESPONSE_BYTES = 64 * 1024 * 1024
 MAX_BASE64_CHARS = 64 * 1024 * 1024
 MAX_IMAGE_DATA_URL_CHARS = 20_971_520
-SUPPORTED_QUALITIES = {"low", "medium", "high", "xhigh", "max", "auto"}
-SUPPORTED_OUTPUT_FORMATS = {"png", "jpeg", "jpg", "webp"}
-SUPPORTED_BACKGROUNDS = {"opaque", "transparent", "auto"}
-SUPPORTED_MODERATIONS = {"low", "auto"}
 CHATGPT_AUTH_CLAIM = "https://api.openai.com/auth"
 CHATGPT_ACCOUNT_ID_CLAIM = "chatgpt_account_id"
-GPT_IMAGE_2_MIN_PIXELS = 655_360
-GPT_IMAGE_2_MAX_PIXELS = 8_294_400
-GPT_IMAGE_2_MAX_EDGE = 3840
-GPT_IMAGE_2_MAX_RATIO = 3.0
 
 
 class CliError(RuntimeError):
@@ -398,89 +381,6 @@ def read_prompt(prompt: str | None, prompt_file: str | None) -> str:
     return text
 
 
-def normalize_output_format(value: str | None) -> str:
-    fmt = (value or DEFAULT_OUTPUT_FORMAT).lower()
-    if fmt not in SUPPORTED_OUTPUT_FORMATS:
-        raise CliError("output format must be png, jpeg, jpg, or webp.")
-    return "jpeg" if fmt == "jpg" else fmt
-
-
-def is_gpt_image_2_5(model: str) -> bool:
-    return bool(re.fullmatch(r"gpt-image-2\.5-(?:flare|sunburst)(?:-\d{4}-\d{2}-\d{2})?", model))
-
-
-def validate_quality(value: str, model: str) -> None:
-    if value not in SUPPORTED_QUALITIES:
-        raise CliError("quality must be low, medium, high, xhigh, max, or auto.")
-    if value in {"xhigh", "max"} and not is_gpt_image_2_5(model):
-        raise CliError("xhigh and max quality require gpt-image-2.5-flare or gpt-image-2.5-sunburst.")
-
-
-def validate_background(value: str | None, model: str, output_format: str) -> None:
-    if value is not None and value not in SUPPORTED_BACKGROUNDS:
-        raise CliError("background must be auto, opaque, or transparent.")
-    if value == "transparent":
-        if not is_gpt_image_2_5(model):
-            raise CliError("transparent backgrounds require gpt-image-2.5-flare or gpt-image-2.5-sunburst in this CLI.")
-        if output_format not in {"png", "webp"}:
-            raise CliError("transparent backgrounds require png or webp output.")
-
-
-def validate_moderation(value: str | None) -> None:
-    if value is not None and value not in SUPPORTED_MODERATIONS:
-        raise CliError("moderation must be low or auto.")
-
-
-def validate_output_compression(value: int | None, output_format: str) -> None:
-    if value is None:
-        return
-    if value < 0 or value > 100:
-        raise CliError("output-compression must be between 0 and 100.")
-    if output_format not in {"jpeg", "webp"}:
-        raise CliError("output-compression is only supported for jpeg or webp output.")
-
-
-def default_output_compression(output_format: str) -> int | None:
-    if output_format in {"jpeg", "webp"}:
-        return DEFAULT_OUTPUT_COMPRESSION
-    return None
-
-
-def parse_size(value: str) -> tuple[int, int] | None:
-    match = re.fullmatch(r"([1-9][0-9]*)x([1-9][0-9]*)", value)
-    if not match:
-        return None
-    return int(match.group(1)), int(match.group(2))
-
-
-def is_gpt_image_2(model: str) -> bool:
-    return bool(re.fullmatch(r"gpt-image-2(?:-\d{4}-\d{2}-\d{2})?", model)) or is_gpt_image_2_5(model)
-
-
-def validate_size(size: str, model: str) -> None:
-    if size == "auto":
-        return
-    parsed = parse_size(size)
-    if parsed is None:
-        raise CliError("size must be auto or WIDTHxHEIGHT, for example 1024x1024.")
-    width, height = parsed
-    if not is_gpt_image_2(model):
-        if size not in {"1024x1024", "1536x1024", "1024x1536"}:
-            raise CliError("this image model only supports 1024x1024, 1536x1024, 1024x1536, or auto.")
-        return
-    max_edge = max(width, height)
-    min_edge = min(width, height)
-    pixels = width * height
-    if max_edge > GPT_IMAGE_2_MAX_EDGE:
-        raise CliError("GPT Image 2/2.5 max edge must be <= 3840.")
-    if width % 16 != 0 or height % 16 != 0:
-        raise CliError("GPT Image 2/2.5 width and height must be multiples of 16.")
-    if max_edge / min_edge > GPT_IMAGE_2_MAX_RATIO:
-        raise CliError("GPT Image 2/2.5 long-to-short ratio must be <= 3:1.")
-    if pixels < GPT_IMAGE_2_MIN_PIXELS or pixels > GPT_IMAGE_2_MAX_PIXELS:
-        raise CliError("GPT Image 2/2.5 total pixels must be between 655,360 and 8,294,400.")
-
-
 def guess_mime(path: Path, data: bytes) -> str:
     if data.startswith(b"\x89PNG\r\n\x1a\n"):
         return "image/png"
@@ -509,50 +409,15 @@ def image_reference(path: Path) -> dict[str, str]:
     return {"image_url": image_to_data_url(path)}
 
 
-def build_image_body(args: argparse.Namespace, prompt: str, image_paths: list[str]) -> tuple[str, str, dict[str, Any]]:
+def build_image_body(prompt: str, image_paths: list[str], transparent: bool) -> dict[str, Any]:
     if len(image_paths) > MAX_INPUT_IMAGES:
         raise CliError(f"At most {MAX_INPUT_IMAGES} input images are supported.")
-    if args.mask and not image_paths:
-        raise CliError("--mask can only be used with at least one --image input.")
-
-    image_model = args.model
-    output_format = normalize_output_format(args.output_format)
-    output_compression = (
-        args.output_compression
-        if args.output_compression is not None
-        else default_output_compression(output_format)
-    )
-
-    validate_quality(args.quality, image_model)
-    validate_background(args.background, image_model, output_format)
-    validate_moderation(args.moderation)
-    validate_output_compression(output_compression, output_format)
-    validate_size(args.size, image_model)
-
-    body: dict[str, Any] = {
-        "prompt": prompt,
-        "model": image_model,
-        "n": args.count,
-        "size": args.size,
-        "quality": args.quality,
-        "output_format": output_format,
-    }
-    if args.background:
-        body["background"] = args.background
-    if args.moderation:
-        body["moderation"] = args.moderation
-    if output_compression is not None:
-        body["output_compression"] = output_compression
-    if args.user:
-        body["user"] = args.user
-
-    operation = "edit" if image_paths else "generate"
+    body: dict[str, Any] = {"prompt": prompt}
     if image_paths:
         body["images"] = [image_reference(Path(raw)) for raw in image_paths]
-        if args.mask:
-            body["mask"] = image_reference(Path(args.mask))
-
-    return operation, image_model, body
+    if transparent:
+        body["background"] = "transparent"
+    return body
 
 
 def codex_image_headers(auth: CodexAuth) -> dict[str, str]:
@@ -620,22 +485,23 @@ def extract_image_payloads(response: dict[str, Any]) -> list[tuple[str, str | No
     return payloads
 
 
-def write_images(payloads: list[tuple[str, str | None]], out: str, output_format: str) -> list[Path]:
+def write_images(payloads: list[tuple[str, str | None]], out: str) -> list[Path]:
     if not payloads:
         raise CliError("No image payload found in Codex response.")
     target = Path(out)
     target.parent.mkdir(parents=True, exist_ok=True)
-    ext = "jpg" if output_format == "jpeg" else output_format
     multi = len(payloads) > 1
     written: list[Path] = []
     for index, (payload, _revised_prompt) in enumerate(payloads, start=1):
         if len(payload) > MAX_BASE64_CHARS:
             raise CliError("Image payload exceeded size limit.")
         data = base64.b64decode(payload)
+        if not data.startswith(b"\x89PNG\r\n\x1a\n"):
+            raise CliError("Expected a PNG payload from the backend.")
         path = target
         if multi:
             stem = target.stem or "image"
-            suffix = target.suffix or f".{ext}"
+            suffix = target.suffix or ".png"
             path = target.with_name(f"{stem}-{index:02d}{suffix}")
         path.write_bytes(data)
         written.append(path)
@@ -667,10 +533,10 @@ def cmd_auth_status(args: argparse.Namespace) -> int:
 def cmd_generate(args: argparse.Namespace) -> int:
     prompt = read_prompt(args.prompt, args.prompt_file)
     image_paths = args.image or []
-    if args.count < 1 or args.count > MAX_COUNT:
-        raise CliError(f"--count must be between 1 and {MAX_COUNT}.")
-    output_format = normalize_output_format(args.output_format)
-    operation, image_model, body = build_image_body(args, prompt, image_paths)
+    if args.out and Path(args.out).suffix.lower() != ".png":
+        raise CliError("--out requires a .png filename.")
+    operation = "edit" if image_paths else "generate"
+    body = build_image_body(prompt, image_paths, args.transparent_background)
     url = image_endpoint_url(args.base_url, operation)
 
     if args.dry_run:
@@ -678,16 +544,9 @@ def cmd_generate(args: argparse.Namespace) -> int:
             "url": url,
             "auth": "Codex OAuth access token (not loaded during dry-run)",
             "operation": operation,
-            "image_model": image_model,
-            "size": body["size"],
-            "quality": body.get("quality"),
-            "output_format": output_format,
-            "background": body.get("background"),
-            "moderation": body.get("moderation"),
-            "output_compression": body.get("output_compression"),
+            "request_fields": list(body),
             "input_images": len(image_paths),
-            "mask": bool(args.mask),
-            "count": args.count,
+            "transparent_background": args.transparent_background,
         }
         print(json.dumps(summary, ensure_ascii=False, indent=2))
         return 0
@@ -695,11 +554,11 @@ def cmd_generate(args: argparse.Namespace) -> int:
     auth = load_or_login_codex_auth(args)
     start = time.time()
     response = post_image_json(url, auth, body, args.timeout)
-    written = write_images(extract_image_payloads(response), args.out, output_format)
+    written = write_images(extract_image_payloads(response), args.out or "output/codex-gpt-image/output.png")
     for path in written:
         print(path)
     eprint(f"Generated {len(written)} image(s) via Codex OAuth in {time.time() - start:.1f}s.")
-    eprint(f"Requested model: {image_model}; backend-reported model: {response.get('model') or 'not reported (selection unverified)'}.")
+    eprint(f"Backend-reported model: {response.get('model') or 'not reported (selection unverified)'}.")
     return 0
 
 
@@ -724,27 +583,23 @@ def build_parser() -> argparse.ArgumentParser:
     login.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT)
     login.set_defaults(func=lambda args: 0 if login_device_code(args) else 1)
 
-    gen = sub.add_parser("generate", help="Generate or edit an image through Codex OAuth.")
-    gen.add_argument("--prompt", "-p")
-    gen.add_argument("--prompt-file")
-    gen.add_argument("--image", "-i", action="append", help="Reference/edit image path. Repeatable.")
-    gen.add_argument("--mask", help="Mask image path for edits. Requires at least one --image.")
-    gen.add_argument("--out", "-o", default="output/codex-gpt-image/output.png")
-    gen.add_argument("--model", default=os.getenv("CODEX_GPT_IMAGE_MODEL", DEFAULT_IMAGE_MODEL))
-    gen.add_argument("--size", default=DEFAULT_SIZE)
-    gen.add_argument("--quality", default=DEFAULT_QUALITY, choices=sorted(SUPPORTED_QUALITIES))
-    gen.add_argument("--output-format", default=DEFAULT_OUTPUT_FORMAT, choices=sorted(SUPPORTED_OUTPUT_FORMATS))
-    gen.add_argument("--background", default=DEFAULT_BACKGROUND, choices=sorted(SUPPORTED_BACKGROUNDS))
-    gen.add_argument("--moderation", default=DEFAULT_MODERATION, choices=sorted(SUPPORTED_MODERATIONS))
-    gen.add_argument("--output-compression", type=int, help="Compression level 0-100. Only valid for jpeg/webp.")
-    gen.add_argument("--user")
-    gen.add_argument("--count", type=int, default=DEFAULT_COUNT, help="Number of images, 1-10.")
-    gen.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT)
-    gen.add_argument("--base-url", default=None)
-    gen.add_argument("--login-if-missing", action="store_true")
-    gen.add_argument("--open-browser", action="store_true")
+    gen = sub.add_parser(
+        "generate",
+        help="Generate or edit an image through Codex OAuth.",
+        description="Supply exactly one of --prompt or --prompt-file. All other options are optional.",
+    )
+    prompts = gen.add_mutually_exclusive_group(required=True)
+    prompts.add_argument("--prompt", "-p", metavar="TEXT", help="Image generation or editing instructions.")
+    prompts.add_argument("--prompt-file", metavar="PATH", help="Read the prompt from a UTF-8 text file.")
+    gen.add_argument("--image", "-i", action="append", help="Edit using this image. Repeat in reference order. Omit to generate a new image.")
+    gen.add_argument("--transparent-background", action="store_true", help="Request a transparent PNG. Omit to leave the background up to the backend.")
+    gen.add_argument("--out", "-o", metavar="PATH", help="Output PNG path (default: output/codex-gpt-image/output.png).")
+    gen.add_argument("--timeout", type=int, default=DEFAULT_TIMEOUT, help="Request timeout in seconds (default: %(default)s).")
+    gen.add_argument("--base-url", help="Override the Codex backend base URL.")
+    gen.add_argument("--login-if-missing", action="store_true", help="Start device login if local authentication is missing.")
+    gen.add_argument("--open-browser", action="store_true", help="Open the verification page during device login.")
     gen.add_argument("--client-id", help="Override the Codex OAuth client id when --login-if-missing runs.")
-    gen.add_argument("--dry-run", action="store_true")
+    gen.add_argument("--dry-run", action="store_true", help="Show the endpoint and request fields without sending the request.")
     gen.set_defaults(func=cmd_generate)
 
     return parser
